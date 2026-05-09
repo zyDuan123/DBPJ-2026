@@ -7,6 +7,7 @@
       </div>
       <div class="header-actions">
         <el-button type="success" @click="$router.push(`/organizer/activities/${route.params.id}/feedback`)">反馈看板</el-button>
+        <el-button type="warning" :loading="absenceLoading" @click="handleMarkAbsences">标记缺勤</el-button>
         <el-button @click="load">刷新</el-button>
       </div>
     </div>
@@ -15,12 +16,14 @@
       <div class="metric"><span>正选</span><strong>{{ countByStatus('ENROLLED') }}</strong></div>
       <div class="metric"><span>候补</span><strong>{{ countByStatus('WAITLISTED') }}</strong></div>
       <div class="metric"><span>已签到</span><strong>{{ countByStatus('CHECKED_IN') }}</strong></div>
+      <div class="metric"><span>缺勤</span><strong>{{ countByStatus('ABSENT') }}</strong></div>
     </div>
     <div class="action-band">
       <el-select v-model="status" placeholder="状态" clearable @change="load">
         <el-option label="正选" value="ENROLLED" />
         <el-option label="候补" value="WAITLISTED" />
         <el-option label="已签到" value="CHECKED_IN" />
+        <el-option label="缺勤" value="ABSENT" />
       </el-select>
       <el-input v-model="checkInCode" placeholder="粘贴签到码" style="width: 360px" />
       <el-button type="primary" @click="handleCheckIn">核销签到</el-button>
@@ -68,14 +71,15 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { checkIn, getActivityRegistrations } from '../../api/registration'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { checkIn, getActivityRegistrations, markAbsences } from '../../api/registration'
 import { RegistrationStatusText, statusTag } from '../../utils/enums'
 
 const route = useRoute()
 const status = ref('')
 const records = ref<any[]>([])
 const checkInCode = ref('')
+const absenceLoading = ref(false)
 
 function countByStatus(value: string) {
   return records.value.filter((item) => item.registrationStatus === value).length
@@ -91,6 +95,20 @@ async function handleCheckIn() {
   ElMessage.success('签到成功')
   checkInCode.value = ''
   await load()
+}
+
+async function handleMarkAbsences() {
+  await ElMessageBox.confirm('将当前仍为正选且未签到的学生标记为缺勤，并扣减信用分。确认继续？', '标记缺勤', {
+    type: 'warning',
+  })
+  absenceLoading.value = true
+  try {
+    const result = await markAbsences(route.params.id as string) as any
+    ElMessage.success(`已标记 ${result.absentCount || 0} 条缺勤记录`)
+    await load()
+  } finally {
+    absenceLoading.value = false
+  }
 }
 
 onMounted(load)

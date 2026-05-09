@@ -23,3 +23,7 @@ export function getCheckInCode(registrationId: string | number) {
 export function checkIn(checkInCode: string) {
   return request.patch('/registrations/check-in', { checkInCode }) as unknown as Promise<any>
 }
+
+export function markAbsences(activityId: string | number) {
+  return request.post(`/activities/${activityId}/registrations/absences`) as unknown as Promise<any>
+}

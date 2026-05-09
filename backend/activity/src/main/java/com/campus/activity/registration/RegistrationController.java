@@ -192,6 +192,40 @@ public class RegistrationController {
         return Result.success(new PageResult<>(rows, total, page, size));
     }
 
+    @PostMapping("/activities/{activityId}/registrations/absences")
+    @Transactional
+    public Result<Map<String, Object>> markAbsences(@PathVariable int activityId) {
+        CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
+        validateActivityAccess(activityId, user);
+        Map<String, Object> activity = lockActivity(activityId);
+        LocalDateTime endTime = TimeValues.toLocalDateTime(activity.get("end_time"));
+        if (endTime != null && LocalDateTime.now().isBefore(endTime)) {
+            throw new BusinessException(40903, "活动结束后才能标记缺勤");
+        }
+        int absentCount = jdbcTemplate.update("""
+                UPDATE Registration
+                SET status = 'ABSENT'
+                WHERE activity_id = ? AND status = 'ENROLLED'
+                """, activityId);
+        if (absentCount > 0) {
+            jdbcTemplate.update("""
+                    UPDATE Activity
+                    SET current_enrollment = GREATEST(current_enrollment - ?, 0)
+                    WHERE activity_id = ?
+                    """, absentCount, activityId);
+            jdbcTemplate.update("""
+                    INSERT IGNORE INTO CreditRecord(student_id, activity_id, registration_id, change_value, reason_type, reason, operator_id)
+                    SELECT student_id, activity_id, registration_id, -10, 'ABSENT', '活动结束后未完成签到', ?
+                    FROM Registration
+                    WHERE activity_id = ? AND status = 'ABSENT'
+                    """, user.id(), activityId);
+        }
+        return Result.success(Map.of(
+                "activityId", activityId,
+                "absentCount", absentCount
+        ));
+    }
+
     private int upsertRegistration(int studentId, int activityId, String status, Integer queueNo) {
         var existing = jdbcTemplate.queryForList("""
                 SELECT registration_id

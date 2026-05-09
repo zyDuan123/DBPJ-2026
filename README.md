@@ -4,13 +4,13 @@
 
 本项目是数据库系统课程实践项目，目标是实现一个以 MySQL 数据库为核心的校园活动报名 Web 系统。系统支持学生、组织者、管理员三类角色，覆盖活动资源维护、活动发布审核、学生报名、满员候补、取消递补、现场签到、基础统计和二期评价反馈等流程。
 
-当前版本已从一期闭环进入二期迭代：一期主流程可运行、可联调、可演示；二期已启动活动评价与反馈看板，信用分、站内通知、审计日志、Excel 导出等能力继续预留。
+当前版本已从一期闭环进入二期迭代：一期主流程可运行、可联调、可演示；二期已完成活动评价与反馈看板、信用分与缺勤处理，站内通知、审计日志、Excel 导出等能力继续预留。
 
 ## 2. 功能概览
 
-- 学生端：活动浏览、活动详情、报名、候补、取消报名、我的活动、签到码、活动评价。
-- 组织者端：活动创建、草稿编辑、提交审核、活动管理、报名名单、签到核销、反馈看板。
-- 管理员端：活动审核、校区/场地/分类维护、基础统计、反馈概览。
+- 学生端：活动浏览、活动详情、报名、候补、取消报名、我的活动、签到码、活动评价、信用分与信用流水。
+- 组织者端：活动创建、草稿编辑、提交审核、活动管理、报名名单、签到核销、缺勤标记、反馈看板。
+- 管理员端：活动审核、校区/场地/分类维护、基础统计、反馈概览、信用风险概览。
 - 数据库能力：主外键约束、唯一约束、检查约束、报名人数冗余字段、候补队列、签到状态。
 
 ## 3. 技术栈
@@ -32,6 +32,7 @@ DBPJ-2026
 ├── sql
 │   ├── schema.sql            # 建表和演示数据初始化脚本
 │   ├── phase2_feedback.sql   # 二期评价反馈增量迁移脚本
+│   ├── phase2_credit.sql     # 二期信用分增量迁移脚本
 │   └── fix_seed_utf8.sql     # 旧容器中文 seed 修复脚本
 ├── scripts
 │   └── smoke-test.ps1        # API smoke test 脚本
@@ -61,7 +62,7 @@ DBPJ-2026
 docker compose up -d mysql
 ```
 
-首次启动会自动执行 `sql/schema.sql`，创建数据库 `campus_activity`、7 张核心表和演示数据。
+首次启动会自动执行 `sql/schema.sql`，创建数据库 `campus_activity`、8 张核心表和演示数据。
 
 数据库连接信息：
 
@@ -100,6 +101,20 @@ docker exec dbpj-2026-mysql sh -c "mysql --default-character-set=utf8mb4 -ucampu
 docker cp sql/phase2_feedback.sql dbpj-2026-mysql:/tmp/phase2_feedback.sql
 docker exec dbpj-2026-mysql sh -c "mysql --default-character-set=utf8mb4 -ucampus -pcampus123 -D campus_activity < /tmp/phase2_feedback.sql"
 ```
+
+如果继续升级二期信用分与缺勤处理功能，执行：
+
+```bash
+docker cp sql/phase2_credit.sql dbpj-2026-mysql:/tmp/phase2_credit.sql
+docker exec dbpj-2026-mysql sh -c "mysql --default-character-set=utf8mb4 -ucampus -pcampus123 -D campus_activity < /tmp/phase2_credit.sql"
+```
+
+信用分规则：
+
+- 初始信用分按 100 展示，不直接写入用户表。
+- 组织者或管理员在活动结束后标记缺勤，未签到的正选报名会变为 `ABSENT`，信用分 `-10`。
+- 学生完成签到时会写入信用流水，信用分 `+1`。
+- 所有信用变化都保存在 `CreditRecord`，便于后续做申诉、审计和人工调整。
 
 ## 7. 后端运行
 

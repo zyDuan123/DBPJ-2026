@@ -14,6 +14,7 @@
       <div class="metric"><span>报名记录</span><strong>{{ overview.registrationCount }}</strong></div>
       <div class="metric"><span>已签到</span><strong>{{ overview.checkedInCount }}</strong></div>
       <div class="metric"><span>评价均分</span><strong>{{ feedbackSummary.averageRating || 0 }}</strong></div>
+      <div class="metric"><span>缺勤记录</span><strong>{{ creditSummary.absentCount || 0 }}</strong></div>
     </div>
     <div class="page-split" style="margin-top: 16px">
       <div class="panel">
@@ -39,8 +40,8 @@
             <span class="muted">评价正向比例</span>
           </div>
           <div class="timeline-item">
-            <strong>通知与审计</strong>
-            <span class="muted">后续可接入消息提醒、操作日志和异常报名追踪。</span>
+            <strong>{{ creditSummary.totalChange || 0 }}</strong>
+            <span class="muted">全站信用分净变化</span>
           </div>
         </div>
       </div>
@@ -67,11 +68,24 @@
         <el-table-column prop="averageRating" label="平均评分" width="120" />
       </el-table>
     </div>
+    <div class="panel" style="margin-top: 16px">
+      <div class="table-title">
+        <h2 class="section-title">信用风险学生</h2>
+        <span class="muted">按信用分和缺勤次数排序</span>
+      </div>
+      <el-table :data="riskStudents" stripe>
+        <el-table-column prop="studentName" label="学生" />
+        <el-table-column prop="studentNo" label="学号" />
+        <el-table-column prop="creditScore" label="信用分" width="120" />
+        <el-table-column prop="absentCount" label="缺勤次数" width="120" />
+      </el-table>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { getCreditOverview } from '../../api/credit'
 import { getFeedbackOverview } from '../../api/feedback'
 import { getCampusUsage, getCategoryPopularity, getOverview } from '../../api/stats'
 
@@ -80,6 +94,8 @@ const campusUsage = ref<any[]>([])
 const categoryPopularity = ref<any[]>([])
 const feedbackSummary = ref<any>({})
 const topFeedbackActivities = ref<any[]>([])
+const creditSummary = ref<any>({})
+const riskStudents = ref<any[]>([])
 const checkInRate = computed(() => {
   const total = Number(overview.value.registrationCount || 0)
   if (!total) return 0
@@ -93,6 +109,9 @@ async function load() {
   const feedback = await getFeedbackOverview() as any
   feedbackSummary.value = feedback.summary || {}
   topFeedbackActivities.value = feedback.topActivities || []
+  const credit = await getCreditOverview() as any
+  creditSummary.value = credit.summary || {}
+  riskStudents.value = credit.riskStudents || []
 }
 
 onMounted(load)

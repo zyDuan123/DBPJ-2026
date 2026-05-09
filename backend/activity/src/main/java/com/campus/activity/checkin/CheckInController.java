@@ -95,6 +95,12 @@ public class CheckInController {
                 SET status = 'CHECKED_IN', check_in_time = CURRENT_TIMESTAMP
                 WHERE registration_id = ?
                 """, registrationId);
+        jdbcTemplate.update("""
+                INSERT IGNORE INTO CreditRecord(student_id, activity_id, registration_id, change_value, reason_type, reason, operator_id)
+                SELECT r.student_id, r.activity_id, r.registration_id, 1, 'CHECK_IN', '按时完成活动签到', ?
+                FROM Registration r
+                WHERE r.registration_id = ?
+                """, user.id(), registrationId);
         return Result.success(Map.of(
                 "registrationId", registrationId,
                 "registrationStatus", "CHECKED_IN",
