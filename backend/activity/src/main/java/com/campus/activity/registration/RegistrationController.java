@@ -8,6 +8,7 @@ import com.campus.activity.common.PageResult;
 import com.campus.activity.common.RegistrationStatus;
 import com.campus.activity.common.Result;
 import com.campus.activity.common.Role;
+import com.campus.activity.common.TimeValues;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -39,7 +40,7 @@ public class RegistrationController {
         if (!"PUBLISHED".equals(activity.get("status"))) {
             throw new BusinessException(40904, "活动当前不可报名");
         }
-        LocalDateTime deadline = ((java.sql.Timestamp) activity.get("enroll_deadline")).toLocalDateTime();
+        LocalDateTime deadline = TimeValues.toLocalDateTime(activity.get("enroll_deadline"));
         if (LocalDateTime.now().isAfter(deadline)) {
             throw new BusinessException(40904, "报名已截止");
         }

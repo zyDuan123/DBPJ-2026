@@ -99,7 +99,8 @@ public class ActivityController {
                 SELECT a.activity_id AS id, a.title, a.poster_url AS posterUrl, a.description,
                        a.start_time AS startTime, a.end_time AS endTime, a.enroll_deadline AS enrollDeadline,
                        c.campus_name AS campusName, v.venue_name AS venueName, v.room_number AS roomNumber,
-                       cat.category_name AS categoryName, a.capacity_limit AS capacityLimit,
+                       cat.category_name AS categoryName, a.venue_id AS venueId, a.category_id AS categoryId,
+                       a.capacity_limit AS capacityLimit,
                        a.current_enrollment AS currentEnrollment, a.status, a.reject_reason AS rejectReason,
                        u.username AS organizerName, a.organizer_id AS organizerId
                 FROM Activity a
