@@ -5,7 +5,10 @@
         <h1 class="page-title">报名名单</h1>
         <p class="page-subtitle">集中处理候补队列、现场签到核销和名单核对。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
+      <div class="header-actions">
+        <el-button type="success" @click="$router.push(`/organizer/activities/${route.params.id}/feedback`)">反馈看板</el-button>
+        <el-button @click="load">刷新</el-button>
+      </div>
     </div>
     <div class="metric-grid" style="margin-bottom: 16px">
       <div class="metric"><span>名单人数</span><strong>{{ records.length }}</strong></div>

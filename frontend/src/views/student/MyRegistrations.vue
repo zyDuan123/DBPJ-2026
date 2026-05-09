@@ -34,9 +34,10 @@
             </template>
           </el-table-column>
           <el-table-column prop="queueNo" label="候补序号" width="100" />
-          <el-table-column label="操作" width="120">
+          <el-table-column label="操作" width="150">
             <template #default="{ row }">
               <el-button v-if="['ENROLLED', 'WAITLISTED'].includes(row.registrationStatus)" link type="danger" @click="cancel(row.registrationId)">取消</el-button>
+              <el-button v-if="row.registrationStatus === 'CHECKED_IN'" link type="success" @click="openFeedback(row)">评价</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -59,16 +60,37 @@
         </div>
       </div>
     </div>
+
+    <el-dialog v-model="feedbackVisible" title="活动评价" width="560px">
+      <el-form label-position="top">
+        <el-form-item label="评分">
+          <el-rate v-model="feedbackForm.rating" show-score />
+        </el-form-item>
+        <el-form-item label="反馈内容">
+          <el-input v-model="feedbackForm.content" type="textarea" :rows="5" maxlength="1000" show-word-limit placeholder="可以写下活动内容、场地、组织流程等建议" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="feedbackVisible = false">取消</el-button>
+        <el-button type="primary" :loading="feedbackLoading" @click="saveFeedback">提交评价</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { getMyFeedback, submitFeedback } from '../../api/feedback'
 import { cancelRegistration, getMyRegistrations } from '../../api/registration'
 import { RegistrationStatusText, statusTag } from '../../utils/enums'
 
 const status = ref('')
 const records = ref<any[]>([])
+const feedbackVisible = ref(false)
+const feedbackLoading = ref(false)
+const currentRecord = ref<any>(null)
+const feedbackForm = ref({ rating: 5, content: '' })
 
 function countByStatus(value: string) {
   return records.value.filter((item) => item.registrationStatus === value).length
@@ -82,6 +104,31 @@ async function load() {
 async function cancel(id: number) {
   await cancelRegistration(id)
   await load()
+}
+
+async function openFeedback(row: any) {
+  currentRecord.value = row
+  feedbackForm.value = { rating: 5, content: '' }
+  const existing = await getMyFeedback(row.activityId) as any
+  if (existing?.feedbackId) {
+    feedbackForm.value = {
+      rating: Number(existing.rating || 5),
+      content: existing.content || '',
+    }
+  }
+  feedbackVisible.value = true
+}
+
+async function saveFeedback() {
+  if (!currentRecord.value) return
+  feedbackLoading.value = true
+  try {
+    await submitFeedback(currentRecord.value.activityId, feedbackForm.value)
+    ElMessage.success('评价已提交')
+    feedbackVisible.value = false
+  } finally {
+    feedbackLoading.value = false
+  }
 }
 
 onMounted(load)

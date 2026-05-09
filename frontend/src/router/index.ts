@@ -8,6 +8,7 @@ import MyRegistrations from '../views/student/MyRegistrations.vue'
 import OrganizerActivities from '../views/organizer/OrganizerActivities.vue'
 import ActivityForm from '../views/organizer/ActivityForm.vue'
 import ActivityRegistrations from '../views/organizer/ActivityRegistrations.vue'
+import ActivityFeedback from '../views/organizer/ActivityFeedback.vue'
 import AdminReviews from '../views/admin/AdminReviews.vue'
 import AdminDictionaries from '../views/admin/AdminDictionaries.vue'
 import AdminStats from '../views/admin/AdminStats.vue'
@@ -36,6 +37,7 @@ const router = createRouter({
         { path: 'activities/new', component: ActivityForm },
         { path: 'activities/:id/edit', component: ActivityForm },
         { path: 'activities/:id/registrations', component: ActivityRegistrations },
+        { path: 'activities/:id/feedback', component: ActivityFeedback },
       ],
     },
     {

@@ -33,6 +33,7 @@
       <el-table-column label="操作" width="280">
         <template #default="{ row }">
           <el-button link type="primary" @click="$router.push(`/organizer/activities/${row.id}/registrations`)">名单</el-button>
+          <el-button link type="success" @click="$router.push(`/organizer/activities/${row.id}/feedback`)">反馈</el-button>
           <el-button v-if="['DRAFT', 'REJECTED'].includes(row.status)" link @click="$router.push(`/organizer/activities/${row.id}/edit`)">编辑</el-button>
           <el-button v-if="['DRAFT', 'REJECTED'].includes(row.status)" link type="primary" @click="submit(row.id)">提交</el-button>
           <el-button v-if="!['CANCELLED', 'FINISHED'].includes(row.status)" link type="danger" @click="cancel(row.id)">取消</el-button>

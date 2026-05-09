@@ -13,6 +13,7 @@
       <div class="metric"><span>已发布</span><strong>{{ overview.publishedCount }}</strong></div>
       <div class="metric"><span>报名记录</span><strong>{{ overview.registrationCount }}</strong></div>
       <div class="metric"><span>已签到</span><strong>{{ overview.checkedInCount }}</strong></div>
+      <div class="metric"><span>评价均分</span><strong>{{ feedbackSummary.averageRating || 0 }}</strong></div>
     </div>
     <div class="page-split" style="margin-top: 16px">
       <div class="panel">
@@ -34,12 +35,12 @@
             <span class="muted">当前签到率</span>
           </div>
           <div class="timeline-item">
-            <strong>通知与审计</strong>
-            <span class="muted">二期可接入消息提醒、操作日志和异常报名追踪。</span>
+            <strong>{{ feedbackSummary.positiveRate || 0 }}%</strong>
+            <span class="muted">评价正向比例</span>
           </div>
           <div class="timeline-item">
-            <strong>资源治理</strong>
-            <span class="muted">结合字典维护逐步沉淀校区、场地、分类标准。</span>
+            <strong>通知与审计</strong>
+            <span class="muted">后续可接入消息提醒、操作日志和异常报名追踪。</span>
           </div>
         </div>
       </div>
@@ -55,16 +56,30 @@
             <el-table-column prop="averageEnrollment" label="平均报名" />
           </el-table>
     </div>
+    <div class="panel" style="margin-top: 16px">
+      <div class="table-title">
+        <h2 class="section-title">高分活动反馈</h2>
+        <span class="muted">来自二期评价模块</span>
+      </div>
+      <el-table :data="topFeedbackActivities" stripe>
+        <el-table-column prop="title" label="活动" min-width="220" />
+        <el-table-column prop="feedbackCount" label="反馈数" width="120" />
+        <el-table-column prop="averageRating" label="平均评分" width="120" />
+      </el-table>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { getFeedbackOverview } from '../../api/feedback'
 import { getCampusUsage, getCategoryPopularity, getOverview } from '../../api/stats'
 
 const overview = ref<any>({})
 const campusUsage = ref<any[]>([])
 const categoryPopularity = ref<any[]>([])
+const feedbackSummary = ref<any>({})
+const topFeedbackActivities = ref<any[]>([])
 const checkInRate = computed(() => {
   const total = Number(overview.value.registrationCount || 0)
   if (!total) return 0
@@ -75,6 +90,9 @@ async function load() {
   overview.value = await getOverview()
   campusUsage.value = await getCampusUsage() as any[]
   categoryPopularity.value = await getCategoryPopularity() as any[]
+  const feedback = await getFeedbackOverview() as any
+  feedbackSummary.value = feedback.summary || {}
+  topFeedbackActivities.value = feedback.topActivities || []
 }
 
 onMounted(load)

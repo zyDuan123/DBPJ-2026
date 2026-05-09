@@ -2,15 +2,15 @@
 
 ## 1. 项目简介
 
-本项目是数据库系统课程实践项目，目标是实现一个以 MySQL 数据库为核心的校园活动报名 Web 系统。系统支持学生、组织者、管理员三类角色，覆盖活动资源维护、活动发布审核、学生报名、满员候补、取消递补、现场签到和基础统计等一期核心流程。
+本项目是数据库系统课程实践项目，目标是实现一个以 MySQL 数据库为核心的校园活动报名 Web 系统。系统支持学生、组织者、管理员三类角色，覆盖活动资源维护、活动发布审核、学生报名、满员候补、取消递补、现场签到、基础统计和二期评价反馈等流程。
 
-当前版本为“课程可落地版”：优先保证主流程可运行、可联调、可演示。信用分、活动评价、站内通知、审计日志、Excel 导出等能力作为二期扩展预留。
+当前版本已从一期闭环进入二期迭代：一期主流程可运行、可联调、可演示；二期已启动活动评价与反馈看板，信用分、站内通知、审计日志、Excel 导出等能力继续预留。
 
 ## 2. 功能概览
 
-- 学生端：活动浏览、活动详情、报名、候补、取消报名、我的活动、签到码。
-- 组织者端：活动创建、草稿编辑、提交审核、活动管理、报名名单、签到核销。
-- 管理员端：活动审核、校区/场地/分类维护、基础统计。
+- 学生端：活动浏览、活动详情、报名、候补、取消报名、我的活动、签到码、活动评价。
+- 组织者端：活动创建、草稿编辑、提交审核、活动管理、报名名单、签到核销、反馈看板。
+- 管理员端：活动审核、校区/场地/分类维护、基础统计、反馈概览。
 - 数据库能力：主外键约束、唯一约束、检查约束、报名人数冗余字段、候补队列、签到状态。
 
 ## 3. 技术栈
@@ -31,6 +31,7 @@ DBPJ-2026
 ├── docs                      # 需求、ER 图、数据库设计文档
 ├── sql
 │   ├── schema.sql            # 建表和演示数据初始化脚本
+│   ├── phase2_feedback.sql   # 二期评价反馈增量迁移脚本
 │   └── fix_seed_utf8.sql     # 旧容器中文 seed 修复脚本
 ├── scripts
 │   └── smoke-test.ps1        # API smoke test 脚本
@@ -60,7 +61,7 @@ DBPJ-2026
 docker compose up -d mysql
 ```
 
-首次启动会自动执行 `sql/schema.sql`，创建数据库 `campus_activity`、6 张核心表和演示数据。
+首次启动会自动执行 `sql/schema.sql`，创建数据库 `campus_activity`、7 张核心表和演示数据。
 
 数据库连接信息：
 
@@ -91,6 +92,13 @@ docker compose up -d mysql
 ```bash
 docker cp sql/fix_seed_utf8.sql dbpj-2026-mysql:/tmp/fix_seed_utf8.sql
 docker exec dbpj-2026-mysql sh -c "mysql --default-character-set=utf8mb4 -ucampus -pcampus123 -D campus_activity < /tmp/fix_seed_utf8.sql"
+```
+
+如果是在已有一期数据库上升级二期评价反馈功能，执行：
+
+```bash
+docker cp sql/phase2_feedback.sql dbpj-2026-mysql:/tmp/phase2_feedback.sql
+docker exec dbpj-2026-mysql sh -c "mysql --default-character-set=utf8mb4 -ucampus -pcampus123 -D campus_activity < /tmp/phase2_feedback.sql"
 ```
 
 ## 7. 后端运行

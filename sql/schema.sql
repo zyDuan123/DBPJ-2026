@@ -8,6 +8,7 @@ SET NAMES utf8mb4;
 SET CHARACTER SET utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS ActivityFeedback;
 DROP TABLE IF EXISTS Registration;
 DROP TABLE IF EXISTS Activity;
 DROP TABLE IF EXISTS Category;
@@ -90,11 +91,29 @@ CREATE TABLE Registration (
     CONSTRAINT chk_reg_queue CHECK (queue_no IS NULL OR queue_no > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE ActivityFeedback (
+    feedback_id INT AUTO_INCREMENT PRIMARY KEY,
+    registration_id INT NOT NULL COMMENT '对应报名记录，一条报名最多一条评价',
+    activity_id INT NOT NULL COMMENT '评价活动',
+    student_id INT NOT NULL COMMENT '评价学生',
+    rating TINYINT NOT NULL COMMENT '1-5 星评分',
+    content VARCHAR(1000) COMMENT '文字反馈',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次评价时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
+    CONSTRAINT fk_feedback_registration FOREIGN KEY (registration_id) REFERENCES Registration(registration_id),
+    CONSTRAINT fk_feedback_activity FOREIGN KEY (activity_id) REFERENCES Activity(activity_id),
+    CONSTRAINT fk_feedback_student FOREIGN KEY (student_id) REFERENCES User(user_id),
+    CONSTRAINT uq_feedback_registration UNIQUE (registration_id),
+    CONSTRAINT chk_feedback_rating CHECK (rating BETWEEN 1 AND 5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE INDEX idx_activity_status_time ON Activity(status, start_time);
 CREATE INDEX idx_activity_venue_time ON Activity(venue_id, start_time, end_time);
 CREATE INDEX idx_activity_organizer_status ON Activity(organizer_id, status);
 CREATE INDEX idx_registration_activity_status_queue ON Registration(activity_id, status, queue_no);
 CREATE INDEX idx_registration_student_status ON Registration(student_id, status);
+CREATE INDEX idx_feedback_activity_rating ON ActivityFeedback(activity_id, rating);
+CREATE INDEX idx_feedback_student_activity ON ActivityFeedback(student_id, activity_id);
 CREATE INDEX idx_venue_campus ON Venue(campus_id);
 
 -- 演示初始化数据，密码字段为演示明文；正式环境应替换为哈希。
