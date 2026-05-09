@@ -1,7 +1,13 @@
 <template>
   <el-container class="app-shell">
     <el-aside width="220px">
-      <div class="brand">校园活动</div>
+      <div class="brand">
+        <div class="brand-mark">C</div>
+        <div>
+          <strong>校园活动</strong>
+          <span>Campus Hub</span>
+        </div>
+      </div>
       <el-menu router :default-active="$route.path">
         <template v-for="item in menus" :key="item.path">
           <el-menu-item :index="item.path">{{ item.label }}</el-menu-item>
@@ -10,8 +16,14 @@
     </el-aside>
     <el-container>
       <el-header>
-        <div>{{ userStore.user?.name }} · {{ userStore.user?.role }}</div>
-        <el-button @click="logout">退出</el-button>
+        <div>
+          <strong>{{ roleName }}</strong>
+          <span class="header-subtitle">{{ userStore.user?.name }}</span>
+        </div>
+        <div class="header-actions">
+          <el-tag type="success" effect="plain">二期体验优化中</el-tag>
+          <el-button @click="logout">退出</el-button>
+        </div>
       </el-header>
       <el-main>
         <router-view />
@@ -49,6 +61,13 @@ const menus = computed(() => {
   ]
 })
 
+const roleName = computed(() => {
+  if (userStore.user?.role === 'STUDENT') return '学生门户'
+  if (userStore.user?.role === 'ORGANIZER') return '组织者工作台'
+  if (userStore.user?.role === 'ADMIN') return '管理员控制台'
+  return '校园活动'
+})
+
 function logout() {
   userStore.logout()
   router.push('/login')
@@ -61,7 +80,7 @@ function logout() {
 }
 
 .el-aside {
-  background: #fff;
+  background: #0f172a;
   border-right: 1px solid #e5e7eb;
 }
 
@@ -69,9 +88,52 @@ function logout() {
   height: 60px;
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  font-weight: 700;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 10px;
+  padding: 0 18px;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #2563eb, #14b8a6);
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.brand strong,
+.brand span {
+  display: block;
+}
+
+.brand span {
+  margin-top: 2px;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.el-menu {
+  border-right: none;
+  background: transparent;
+}
+
+:deep(.el-menu-item) {
+  margin: 6px 10px;
+  color: #cbd5e1;
+  border-radius: 8px;
+}
+
+:deep(.el-menu-item.is-active) {
+  color: #fff;
+  background: rgba(37, 99, 235, 0.85);
+}
+
+:deep(.el-menu-item:hover) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .el-header {
@@ -80,6 +142,17 @@ function logout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.header-subtitle {
+  margin-left: 10px;
+  color: #64748b;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .el-main {
