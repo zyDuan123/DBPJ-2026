@@ -1,0 +1,56 @@
+<template>
+  <div class="page">
+    <div class="page-header">
+      <h1 class="page-title">活动管理</h1>
+      <el-button type="primary" @click="$router.push('/organizer/activities/new')">创建活动</el-button>
+    </div>
+    <el-table :data="activities" class="panel">
+      <el-table-column prop="title" label="活动" min-width="180" />
+      <el-table-column prop="startTime" label="时间" width="180" />
+      <el-table-column label="状态" width="120">
+        <template #default="{ row }">
+          <el-tag :type="statusTag(row.status)">{{ ActivityStatusText[row.status] }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="报名" width="100">
+        <template #default="{ row }">{{ row.currentEnrollment }} / {{ row.capacityLimit }}</template>
+      </el-table-column>
+      <el-table-column prop="rejectReason" label="驳回原因" min-width="180" />
+      <el-table-column label="操作" width="280">
+        <template #default="{ row }">
+          <el-button link @click="$router.push(`/organizer/activities/${row.id}/registrations`)">名单</el-button>
+          <el-button v-if="['DRAFT', 'REJECTED'].includes(row.status)" link @click="$router.push(`/organizer/activities/${row.id}/edit`)">编辑</el-button>
+          <el-button v-if="['DRAFT', 'REJECTED'].includes(row.status)" link type="primary" @click="submit(row.id)">提交</el-button>
+          <el-button v-if="!['CANCELLED', 'FINISHED'].includes(row.status)" link type="danger" @click="cancel(row.id)">取消</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { cancelActivity, getActivities, submitActivity } from '../../api/activity'
+import { ActivityStatusText, statusTag } from '../../utils/enums'
+
+const activities = ref<any[]>([])
+
+async function load() {
+  const data = await getActivities({ mine: true, page: 1, size: 50 }) as any
+  activities.value = data.list
+}
+
+async function submit(id: number) {
+  await submitActivity(id)
+  ElMessage.success('已提交审核')
+  await load()
+}
+
+async function cancel(id: number) {
+  await cancelActivity(id)
+  await load()
+}
+
+onMounted(load)
+</script>
