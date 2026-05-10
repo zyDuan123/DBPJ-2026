@@ -1,20 +1,14 @@
-package com.campus.activity.checkin;
+package com.campus.activity.service;
 
 import com.campus.activity.common.Access;
-import com.campus.activity.common.AuthContext;
 import com.campus.activity.common.BusinessException;
 import com.campus.activity.common.CurrentUser;
-import com.campus.activity.common.Result;
 import com.campus.activity.common.Role;
+import com.campus.activity.model.dto.CheckInRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -25,19 +19,21 @@ import java.time.ZoneId;
 import java.util.Base64;
 import java.util.Map;
 
-@RestController
-@RequestMapping("/api/v1/registrations")
-public class CheckInController {
+@Service
+@Transactional(readOnly = true)
+public class CheckInService {
+    private static final int CHECK_IN_CODE_TTL_SECONDS = 2 * 3600;
+    private static final String HMAC_ALGORITHM = "HmacSHA256";
+
     private final JdbcTemplate jdbcTemplate;
     private final String secret;
 
-    public CheckInController(JdbcTemplate jdbcTemplate, @Value("${app.auth-secret}") String secret) {
+    public CheckInService(JdbcTemplate jdbcTemplate, @Value("${app.auth-secret}") String secret) {
         this.jdbcTemplate = jdbcTemplate;
         this.secret = secret;
     }
 
-    @GetMapping("/{registrationId}/check-in-code")
-    public Result<Map<String, Object>> code(@PathVariable int registrationId) {
+    public Map<String, Object> code(int registrationId) {
         CurrentUser student = Access.require(Role.STUDENT);
         var rows = jdbcTemplate.queryForList("""
                 SELECT r.registration_id, r.student_id, r.status, a.end_time
@@ -48,25 +44,20 @@ public class CheckInController {
             throw new BusinessException(40401, "报名记录不存在");
         }
         Map<String, Object> row = rows.get(0);
-        if (((Number) row.get("student_id")).intValue() != student.id()) {
-            throw new BusinessException(40301, "只能生成自己的签到码");
-        }
-        if (!"ENROLLED".equals(row.get("status"))) {
-            throw new BusinessException(40903, "当前报名状态不可签到");
-        }
-        long expiresAt = Instant.now().plusSeconds(2 * 3600).getEpochSecond();
+        validateCanGenerateCode(row, student);
+
+        long expiresAt = Instant.now().plusSeconds(CHECK_IN_CODE_TTL_SECONDS).getEpochSecond();
         String payload = registrationId + ":" + expiresAt;
         String token = base64(payload) + "." + sign(payload);
-        return Result.success(Map.of(
+        return Map.of(
                 "registrationId", registrationId,
                 "checkInCode", token,
                 "expiresAt", LocalDateTime.ofInstant(Instant.ofEpochSecond(expiresAt), ZoneId.systemDefault()).toString()
-        ));
+        );
     }
 
-    @PatchMapping("/check-in")
     @Transactional
-    public Result<Map<String, Object>> checkIn(@RequestBody CheckInRequest request) {
+    public Map<String, Object> checkIn(CheckInRequest request) {
         CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
         int registrationId = parseCode(request.checkInCode());
         var rows = jdbcTemplate.queryForList("""
@@ -79,13 +70,11 @@ public class CheckInController {
             throw new BusinessException(40401, "报名记录不存在");
         }
         Map<String, Object> row = rows.get(0);
-        int organizerId = ((Number) row.get("organizer_id")).intValue();
-        if (user.role() != Role.ADMIN && organizerId != user.id()) {
-            throw new BusinessException(40301, "只能核销自己活动的签到");
-        }
+        validateCanCheckIn(row, user);
+
         String status = (String) row.get("status");
         if ("CHECKED_IN".equals(status)) {
-            return Result.success(Map.of("registrationId", registrationId, "registrationStatus", "CHECKED_IN"));
+            return Map.of("registrationId", registrationId, "registrationStatus", "CHECKED_IN");
         }
         if (!"ENROLLED".equals(status)) {
             throw new BusinessException(40903, "只有正选报名可以签到");
@@ -101,11 +90,27 @@ public class CheckInController {
                 FROM Registration r
                 WHERE r.registration_id = ?
                 """, user.id(), registrationId);
-        return Result.success(Map.of(
+        return Map.of(
                 "registrationId", registrationId,
                 "registrationStatus", "CHECKED_IN",
                 "checkInTime", LocalDateTime.now().toString()
-        ));
+        );
+    }
+
+    private void validateCanGenerateCode(Map<String, Object> row, CurrentUser student) {
+        if (((Number) row.get("student_id")).intValue() != student.id()) {
+            throw new BusinessException(40301, "只能生成自己的签到码");
+        }
+        if (!"ENROLLED".equals(row.get("status"))) {
+            throw new BusinessException(40903, "当前报名状态不可签到");
+        }
+    }
+
+    private void validateCanCheckIn(Map<String, Object> row, CurrentUser user) {
+        int organizerId = ((Number) row.get("organizer_id")).intValue();
+        if (user.role() != Role.ADMIN && organizerId != user.id()) {
+            throw new BusinessException(40301, "只能核销自己活动的签到");
+        }
     }
 
     private int parseCode(String token) {
@@ -131,14 +136,11 @@ public class CheckInController {
 
     private String sign(String payload) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception ex) {
             throw new IllegalStateException("签名失败", ex);
         }
-    }
-
-    public record CheckInRequest(String checkInCode) {
     }
 }

@@ -1,83 +1,43 @@
-package com.campus.activity.feedback;
+package com.campus.activity.service;
 
 import com.campus.activity.common.Access;
-import com.campus.activity.common.AuthContext;
 import com.campus.activity.common.BusinessException;
 import com.campus.activity.common.CurrentUser;
 import com.campus.activity.common.PageResult;
-import com.campus.activity.common.Result;
 import com.campus.activity.common.Role;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
+import com.campus.activity.model.dto.FeedbackRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
-@RestController
-@RequestMapping("/api/v1")
-public class FeedbackController {
+@Service
+@Transactional(readOnly = true)
+public class FeedbackService {
     private final JdbcTemplate jdbcTemplate;
 
-    public FeedbackController(JdbcTemplate jdbcTemplate) {
+    public FeedbackService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    @PostMapping("/activities/{activityId}/feedback")
     @Transactional
-    public Result<Map<String, Object>> submit(@PathVariable int activityId, @Valid @RequestBody FeedbackRequest request) {
+    public Map<String, Object> submit(int activityId, FeedbackRequest request) {
         CurrentUser student = Access.require(Role.STUDENT);
-        var registrations = jdbcTemplate.queryForList("""
-                SELECT registration_id, status
-                FROM Registration
-                WHERE student_id = ? AND activity_id = ?
-                """, student.id(), activityId);
-        if (registrations.isEmpty()) {
-            throw new BusinessException(40301, "只有报名学生可以评价活动");
-        }
-        Map<String, Object> registration = registrations.get(0);
-        if (!"CHECKED_IN".equals(registration.get("status"))) {
-            throw new BusinessException(40903, "只有已签到活动可以评价");
-        }
-
+        Map<String, Object> registration = findCheckedInRegistration(student.id(), activityId);
         int registrationId = ((Number) registration.get("registration_id")).intValue();
-        var existing = jdbcTemplate.queryForList("""
-                SELECT feedback_id
-                FROM ActivityFeedback
-                WHERE registration_id = ?
-                """, registrationId);
-        if (existing.isEmpty()) {
-            jdbcTemplate.update("""
-                    INSERT INTO ActivityFeedback(registration_id, activity_id, student_id, rating, content)
-                    VALUES (?, ?, ?, ?, ?)
-                    """, registrationId, activityId, student.id(), request.rating(), request.content());
-        } else {
-            jdbcTemplate.update("""
-                    UPDATE ActivityFeedback
-                    SET rating = ?, content = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE registration_id = ?
-                    """, request.rating(), request.content(), registrationId);
-        }
 
-        return Result.success(Map.of(
+        upsertFeedback(activityId, request, student.id(), registrationId);
+        return Map.of(
                 "activityId", activityId,
                 "registrationId", registrationId,
                 "rating", request.rating()
-        ));
+        );
     }
 
-    @GetMapping("/activities/{activityId}/feedback/my")
-    public Result<Map<String, Object>> my(@PathVariable int activityId) {
+    public Map<String, Object> my(int activityId) {
         CurrentUser student = Access.require(Role.STUDENT);
         var rows = jdbcTemplate.queryForList("""
                 SELECT f.feedback_id AS feedbackId, f.rating, f.content,
@@ -85,13 +45,10 @@ public class FeedbackController {
                 FROM ActivityFeedback f
                 WHERE f.student_id = ? AND f.activity_id = ?
                 """, student.id(), activityId);
-        return Result.success(rows.isEmpty() ? Map.of() : rows.get(0));
+        return rows.isEmpty() ? Map.of() : rows.get(0);
     }
 
-    @GetMapping("/activities/{activityId}/feedback")
-    public Result<Map<String, Object>> activityFeedback(@PathVariable int activityId,
-                                                        @RequestParam(defaultValue = "1") int page,
-                                                        @RequestParam(defaultValue = "20") int size) {
+    public Map<String, Object> activityFeedback(int activityId, int page, int size) {
         CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
         validateActivityAccess(activityId, user);
         Map<String, Object> summary = jdbcTemplate.queryForMap("""
@@ -111,14 +68,13 @@ public class FeedbackController {
                 ORDER BY f.updated_at DESC
                 LIMIT ?, ?
                 """, activityId, (page - 1) * size, size);
-        return Result.success(Map.of(
+        return Map.of(
                 "summary", normalizeSummary(summary),
                 "records", new PageResult<>(list, total, page, size)
-        ));
+        );
     }
 
-    @GetMapping("/feedback/overview")
-    public Result<Map<String, Object>> overview() {
+    public Map<String, Object> overview() {
         Access.require(Role.ADMIN);
         Map<String, Object> summary = jdbcTemplate.queryForMap("""
                 SELECT COUNT(*) AS feedbackCount,
@@ -137,10 +93,46 @@ public class FeedbackController {
                 ORDER BY averageRating DESC, feedbackCount DESC
                 LIMIT 5
                 """);
-        return Result.success(Map.of(
+        return Map.of(
                 "summary", normalizeSummary(summary),
                 "topActivities", topActivities
-        ));
+        );
+    }
+
+    private Map<String, Object> findCheckedInRegistration(int studentId, int activityId) {
+        var registrations = jdbcTemplate.queryForList("""
+                SELECT registration_id, status
+                FROM Registration
+                WHERE student_id = ? AND activity_id = ?
+                """, studentId, activityId);
+        if (registrations.isEmpty()) {
+            throw new BusinessException(40301, "只有报名学生可以评价活动");
+        }
+        Map<String, Object> registration = registrations.get(0);
+        if (!"CHECKED_IN".equals(registration.get("status"))) {
+            throw new BusinessException(40903, "只有已签到活动可以评价");
+        }
+        return registration;
+    }
+
+    private void upsertFeedback(int activityId, FeedbackRequest request, int studentId, int registrationId) {
+        var existing = jdbcTemplate.queryForList("""
+                SELECT feedback_id
+                FROM ActivityFeedback
+                WHERE registration_id = ?
+                """, registrationId);
+        if (existing.isEmpty()) {
+            jdbcTemplate.update("""
+                    INSERT INTO ActivityFeedback(registration_id, activity_id, student_id, rating, content)
+                    VALUES (?, ?, ?, ?, ?)
+                    """, registrationId, activityId, studentId, request.rating(), request.content());
+            return;
+        }
+        jdbcTemplate.update("""
+                UPDATE ActivityFeedback
+                SET rating = ?, content = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE registration_id = ?
+                """, request.rating(), request.content(), registrationId);
     }
 
     private void validateActivityAccess(int activityId, CurrentUser user) {
@@ -163,8 +155,5 @@ public class FeedbackController {
                 "averageRating", averageRating,
                 "positiveRate", positiveRate
         );
-    }
-
-    public record FeedbackRequest(@Min(1) @Max(5) int rating, String content) {
     }
 }

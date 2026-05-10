@@ -1,9 +1,9 @@
-package com.campus.activity.auth;
+package com.campus.activity.controller;
 
 import com.campus.activity.common.AuthContext;
-import com.campus.activity.common.AuthService;
 import com.campus.activity.common.CurrentUser;
 import com.campus.activity.common.Result;
+import com.campus.activity.service.AuthService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.GetMapping;

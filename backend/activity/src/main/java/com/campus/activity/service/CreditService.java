@@ -1,38 +1,32 @@
-package com.campus.activity.credit;
+package com.campus.activity.service;
 
 import com.campus.activity.common.Access;
-import com.campus.activity.common.AuthContext;
-import com.campus.activity.common.CurrentUser;
 import com.campus.activity.common.PageResult;
-import com.campus.activity.common.Result;
 import com.campus.activity.common.Role;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
 
-@RestController
-@RequestMapping("/api/v1/credit")
-public class CreditController {
+@Service
+@Transactional(readOnly = true)
+public class CreditService {
+    private static final int INITIAL_CREDIT_SCORE = 100;
+
     private final JdbcTemplate jdbcTemplate;
 
-    public CreditController(JdbcTemplate jdbcTemplate) {
+    public CreditService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    @GetMapping("/my")
-    public Result<Map<String, Object>> my(@RequestParam(defaultValue = "1") int page,
-                                          @RequestParam(defaultValue = "20") int size) {
-        CurrentUser student = Access.require(Role.STUDENT);
-        return Result.success(studentCredit(student.id(), page, size));
+    public Map<String, Object> my(int page, int size) {
+        int studentId = Access.require(Role.STUDENT).id();
+        return studentCredit(studentId, page, size);
     }
 
-    @GetMapping("/overview")
-    public Result<Map<String, Object>> overview() {
+    public Map<String, Object> overview() {
         Access.require(Role.ADMIN);
         Map<String, Object> summary = jdbcTemplate.queryForMap("""
                 SELECT COUNT(*) AS recordCount,
@@ -53,10 +47,10 @@ public class CreditController {
                 ORDER BY creditScore ASC, absentCount DESC
                 LIMIT 10
                 """);
-        return Result.success(Map.of(
+        return Map.of(
                 "summary", summary,
                 "riskStudents", riskStudents
-        ));
+        );
     }
 
     private Map<String, Object> studentCredit(int studentId, int page, int size) {
@@ -77,7 +71,7 @@ public class CreditController {
                 LIMIT ?, ?
                 """, studentId, (page - 1) * size, size);
         return Map.of(
-                "score", 100 + (totalChange == null ? 0 : totalChange),
+                "score", INITIAL_CREDIT_SCORE + (totalChange == null ? 0 : totalChange),
                 "records", new PageResult<>(records, total, page, size)
         );
     }
