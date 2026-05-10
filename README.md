@@ -2,21 +2,22 @@
 
 ## 1. 项目简介
 
-本项目是数据库系统课程实践项目，目标是实现一个以 MySQL 数据库为核心的校园活动报名 Web 系统。系统支持学生、组织者、管理员三类角色，覆盖活动资源维护、活动发布审核、学生报名、满员候补、取消递补、现场签到、基础统计和二期评价反馈等流程。
+本项目是数据库系统课程实践项目，目标是实现一个以 MySQL 数据库为核心的校园活动报名 Web 系统。系统支持学生、组织者、管理员三类角色，覆盖活动资源维护、活动发布审核、学生报名、满员候补、取消递补、现场签到、反馈评价、信用分和统计看板等流程。
 
-当前版本已从一期闭环进入二期迭代：一期主流程可运行、可联调、可演示；二期已完成活动评价与反馈看板、信用分与缺勤处理，站内通知、审计日志、Excel 导出等能力继续预留。
+当前版本的基础业务功能已经基本完善：一期主流程和二期核心能力均已落地，可支持完整演示与联调。后端已按四层模型逐步重构为 `controller / service / model/entity / model/mapper`，并引入 MyBatis-Plus 承担实体映射和数据库访问封装。下一阶段重点将从“补齐基础功能”转向“稳定性、体验增强、数据运营能力和工程质量”。
 
 ## 2. 功能概览
 
 - 学生端：活动浏览、活动详情、报名、候补、取消报名、我的活动、签到码、活动评价、信用分与信用流水。
-- 组织者端：活动创建、草稿编辑、提交审核、活动管理、报名名单、签到核销、缺勤标记、反馈看板。
-- 管理员端：活动审核、校区/场地/分类维护、基础统计、反馈概览、信用风险概览。
+- 组织者端：活动创建、草稿编辑、提交审核、活动管理、报名名单、签到核销、缺勤标记、活动反馈看板。
+- 管理员端：活动审核、校区/场地/分类维护、基础统计、全站反馈概览、信用风险概览。
 - 数据库能力：主外键约束、唯一约束、检查约束、报名人数冗余字段、候补队列、签到状态。
+- 工程能力：统一响应、统一异常、角色鉴权、分层目录、MyBatis-Plus 实体和 Mapper、前后端基础构建验证。
 
 ## 3. 技术栈
 
 - 前端：Vue 3、Vite、TypeScript、Element Plus、Pinia、Vue Router、Axios
-- 后端：Spring Boot 4、Spring WebMVC、Spring JDBC、Bean Validation
+- 后端：Spring Boot 4、Spring WebMVC、MyBatis-Plus、Spring JDBC、Bean Validation
 - 数据库：MySQL 8.4.8 LTS
 - 部署辅助：Docker Compose
 
@@ -38,6 +39,19 @@ DBPJ-2026
 │   └── smoke-test.ps1        # API smoke test 脚本
 ├── work_docs                 # 过程文档和接口文档，本地忽略
 └── docker-compose.yml        # MySQL Docker 配置
+```
+
+后端核心包结构：
+
+```text
+com.campus.activity
+├── common                    # 统一响应、异常、鉴权上下文、枚举
+├── controller                # REST API 入口，只做参数接收和服务调用
+├── service                   # 业务规则、权限校验、事务和状态流转
+└── model
+    ├── dto                   # 请求参数对象
+    ├── entity                # 数据库表实体映射
+    └── mapper                # MyBatis-Plus Mapper 与 SQL 封装
 ```
 
 ## 5. 环境要求
@@ -227,6 +241,27 @@ powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 -Port 18080
 ALL API SMOKE TESTS PASSED
 ```
 
+当前开发过程中的构建验证：
+
+```bash
+cd backend/activity
+mvn test
+```
+
+最近一次后端验证结果：
+
+```text
+Tests run: 1, Failures: 0, Errors: 0
+BUILD SUCCESS
+```
+
+前端构建验证：
+
+```bash
+cd frontend
+npm.cmd run build
+```
+
 ## 11. 常见问题
 
 ### 11.1 登录时报 `Failed to obtain JDBC Connection`
@@ -278,3 +313,13 @@ npm.cmd run dev
 - [后端开发文档](./backend/docs/后端开发文档.md)
 
 `work_docs` 目录用于开发过程文档和接口说明，默认被 `.gitignore` 忽略。
+
+## 13. 下一阶段方向
+
+基础功能完成后，建议优先审核以下方向：
+
+- 工程质量：完成 `ActivityService`、`RegistrationService` 的 Mapper 化重构，补充关键事务测试。
+- 用户体验：站内通知、审核结果提醒、候补转正提醒、缺勤扣分提醒。
+- 数据运营：反馈关键词优化、低分反馈跟踪、活动复盘导出、统计图表增强。
+- 管理能力：审计日志、管理员操作留痕、报名名单 Excel 导出。
+- 生产化准备：密码哈希、配置隔离、接口权限测试、部署说明整理。
