@@ -8,11 +8,14 @@ import com.campus.activity.model.dto.VenueRequest;
 import com.campus.activity.model.mapper.CampusMapper;
 import com.campus.activity.model.mapper.CategoryMapper;
 import com.campus.activity.model.mapper.VenueMapper;
+import com.campus.activity.model.vo.CampusVO;
+import com.campus.activity.model.vo.CategoryVO;
+import com.campus.activity.model.vo.MutationResultVO;
+import com.campus.activity.model.vo.VenueVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 
 @Service
 @Transactional(readOnly = true)
@@ -27,37 +30,37 @@ public class DictionaryService {
         this.categoryMapper = categoryMapper;
     }
 
-    public List<Map<String, Object>> campuses() {
-        return campusMapper.listCampuses();
+    public List<CampusVO> campuses() {
+        return campusMapper.listCampuses().stream().map(CampusVO::from).toList();
     }
 
     @Transactional
-    public Map<String, Object> createCampus(CampusRequest request) {
+    public MutationResultVO createCampus(CampusRequest request) {
         Access.require(Role.ADMIN);
         campusMapper.createCampus(request.campusName(), request.location());
-        return Map.of("created", true);
+        return MutationResultVO.createdResult();
     }
 
-    public List<Map<String, Object>> venues(Integer campusId, String keyword) {
+    public List<VenueVO> venues(Integer campusId, String keyword) {
         String like = "%" + (keyword == null ? "" : keyword) + "%";
-        return venueMapper.listVenues(campusId, like);
+        return venueMapper.listVenues(campusId, like).stream().map(VenueVO::from).toList();
     }
 
     @Transactional
-    public Map<String, Object> createVenue(VenueRequest request) {
+    public MutationResultVO createVenue(VenueRequest request) {
         Access.require(Role.ADMIN);
         venueMapper.createVenue(request.venueName(), request.roomNumber(), request.capacity(), request.campusId());
-        return Map.of("created", true);
+        return MutationResultVO.createdResult();
     }
 
-    public List<Map<String, Object>> categories() {
-        return categoryMapper.listCategories();
+    public List<CategoryVO> categories() {
+        return categoryMapper.listCategories().stream().map(CategoryVO::from).toList();
     }
 
     @Transactional
-    public Map<String, Object> createCategory(CategoryRequest request) {
+    public MutationResultVO createCategory(CategoryRequest request) {
         Access.require(Role.ADMIN);
         categoryMapper.createCategory(request.categoryName());
-        return Map.of("created", true);
+        return MutationResultVO.createdResult();
     }
 }

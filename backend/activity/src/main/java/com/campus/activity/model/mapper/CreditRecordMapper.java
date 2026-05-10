@@ -66,4 +66,12 @@ public interface CreditRecordMapper extends BaseMapper<CreditRecord> {
             WHERE r.registration_id = #{registrationId}
             """)
     int insertCheckInCredit(@Param("operatorId") int operatorId, @Param("registrationId") int registrationId);
+
+    @Insert("""
+            INSERT IGNORE INTO CreditRecord(student_id, activity_id, registration_id, change_value, reason_type, reason, operator_id)
+            SELECT student_id, activity_id, registration_id, -10, 'ABSENT', '活动结束后未完成签到', #{operatorId}
+            FROM Registration
+            WHERE activity_id = #{activityId} AND status = 'ABSENT'
+            """)
+    int insertAbsenceCredits(@Param("activityId") int activityId, @Param("operatorId") int operatorId);
 }

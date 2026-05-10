@@ -7,6 +7,15 @@ import com.campus.activity.common.PageResult;
 import com.campus.activity.common.Role;
 import com.campus.activity.model.dto.FeedbackRequest;
 import com.campus.activity.model.mapper.ActivityFeedbackMapper;
+import com.campus.activity.model.vo.FeedbackBoardVO;
+import com.campus.activity.model.vo.FeedbackMineVO;
+import com.campus.activity.model.vo.FeedbackOverviewVO;
+import com.campus.activity.model.vo.FeedbackRecordVO;
+import com.campus.activity.model.vo.FeedbackSubmitVO;
+import com.campus.activity.model.vo.FeedbackSummaryVO;
+import com.campus.activity.model.vo.FeedbackTopActivityVO;
+import com.campus.activity.model.vo.KeywordVO;
+import com.campus.activity.model.vo.RatingDistributionVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,26 +49,22 @@ public class FeedbackService {
     }
 
     @Transactional
-    public Map<String, Object> submit(int activityId, FeedbackRequest request) {
+    public FeedbackSubmitVO submit(int activityId, FeedbackRequest request) {
         CurrentUser student = Access.require(Role.STUDENT);
         Map<String, Object> registration = findCheckedInRegistration(student.id(), activityId);
         int registrationId = ((Number) registration.get("registration_id")).intValue();
 
         upsertFeedback(activityId, request, student.id(), registrationId);
-        return Map.of(
-                "activityId", activityId,
-                "registrationId", registrationId,
-                "rating", request.rating()
-        );
+        return new FeedbackSubmitVO(activityId, registrationId, request.rating());
     }
 
-    public Map<String, Object> my(int activityId) {
+    public FeedbackMineVO my(int activityId) {
         CurrentUser student = Access.require(Role.STUDENT);
         var rows = feedbackMapper.findMine(student.id(), activityId);
-        return rows.isEmpty() ? Map.of() : rows.get(0);
+        return rows.isEmpty() ? null : FeedbackMineVO.from(rows.get(0));
     }
 
-    public Map<String, Object> activityFeedback(int activityId, int page, int size, boolean lowRatingOnly) {
+    public FeedbackBoardVO activityFeedback(int activityId, int page, int size, boolean lowRatingOnly) {
         CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
         validateActivityAccess(activityId, user);
 
@@ -71,21 +76,21 @@ public class FeedbackService {
         List<Map<String, Object>> records = lowRatingOnly
                 ? feedbackMapper.findLowRatingActivityRecords(activityId, LOW_RATING_THRESHOLD, offset, size)
                 : feedbackMapper.findActivityRecords(activityId, offset, size);
-        return Map.of(
-                "summary", normalizeSummary(summary),
-                "ratingDistribution", ratingDistribution(activityId),
-                "keywords", keywords(activityId),
-                "records", new PageResult<>(records, filteredTotal, page, size)
+        return new FeedbackBoardVO(
+                FeedbackSummaryVO.from(normalizeSummary(summary)),
+                ratingDistribution(activityId).stream().map(RatingDistributionVO::from).toList(),
+                keywords(activityId).stream().map(KeywordVO::from).toList(),
+                new PageResult<>(records.stream().map(FeedbackRecordVO::from).toList(), filteredTotal, page, size)
         );
     }
 
-    public Map<String, Object> overview() {
+    public FeedbackOverviewVO overview() {
         Access.require(Role.ADMIN);
-        return Map.of(
-                "summary", normalizeSummary(feedbackMapper.globalSummary()),
-                "ratingDistribution", ratingDistribution(null),
-                "keywords", keywords(null),
-                "topActivities", feedbackMapper.topActivities()
+        return new FeedbackOverviewVO(
+                FeedbackSummaryVO.from(normalizeSummary(feedbackMapper.globalSummary())),
+                ratingDistribution(null).stream().map(RatingDistributionVO::from).toList(),
+                keywords(null).stream().map(KeywordVO::from).toList(),
+                feedbackMapper.topActivities().stream().map(FeedbackTopActivityVO::from).toList()
         );
     }
 

@@ -4,11 +4,15 @@ import com.campus.activity.common.Access;
 import com.campus.activity.common.PageResult;
 import com.campus.activity.common.Role;
 import com.campus.activity.model.mapper.CreditRecordMapper;
+import com.campus.activity.model.vo.CreditMyVO;
+import com.campus.activity.model.vo.CreditOverviewVO;
+import com.campus.activity.model.vo.CreditRecordVO;
+import com.campus.activity.model.vo.CreditRiskStudentVO;
+import com.campus.activity.model.vo.CreditSummaryVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 
 @Service
 @Transactional(readOnly = true)
@@ -21,26 +25,27 @@ public class CreditService {
         this.creditRecordMapper = creditRecordMapper;
     }
 
-    public Map<String, Object> my(int page, int size) {
+    public CreditMyVO my(int page, int size) {
         int studentId = Access.require(Role.STUDENT).id();
         return studentCredit(studentId, page, size);
     }
 
-    public Map<String, Object> overview() {
+    public CreditOverviewVO overview() {
         Access.require(Role.ADMIN);
-        return Map.of(
-                "summary", creditRecordMapper.overviewSummary(),
-                "riskStudents", creditRecordMapper.riskStudents()
+        return new CreditOverviewVO(
+                CreditSummaryVO.from(creditRecordMapper.overviewSummary()),
+                creditRecordMapper.riskStudents().stream().map(CreditRiskStudentVO::from).toList()
         );
     }
 
-    private Map<String, Object> studentCredit(int studentId, int page, int size) {
+    private CreditMyVO studentCredit(int studentId, int page, int size) {
         Long totalChange = creditRecordMapper.totalChange(studentId);
         long total = creditRecordMapper.countStudentRecords(studentId);
-        List<Map<String, Object>> records = creditRecordMapper.studentRecords(studentId, (page - 1) * size, size);
-        return Map.of(
-                "score", INITIAL_CREDIT_SCORE + (totalChange == null ? 0 : totalChange),
-                "records", new PageResult<>(records, total, page, size)
-        );
+        List<CreditRecordVO> records = creditRecordMapper.studentRecords(studentId, (page - 1) * size, size)
+                .stream()
+                .map(CreditRecordVO::from)
+                .toList();
+        return new CreditMyVO(INITIAL_CREDIT_SCORE + (totalChange == null ? 0 : totalChange),
+                new PageResult<>(records, total, page, size));
     }
 }

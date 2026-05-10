@@ -7,6 +7,8 @@ import com.campus.activity.common.Role;
 import com.campus.activity.model.dto.CheckInRequest;
 import com.campus.activity.model.mapper.CreditRecordMapper;
 import com.campus.activity.model.mapper.RegistrationMapper;
+import com.campus.activity.model.vo.CheckInCodeVO;
+import com.campus.activity.model.vo.CheckInResultVO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +40,7 @@ public class CheckInService {
         this.secret = secret;
     }
 
-    public Map<String, Object> code(int registrationId) {
+    public CheckInCodeVO code(int registrationId) {
         CurrentUser student = Access.require(Role.STUDENT);
         Map<String, Object> row = registrationMapper.findCheckInCodeTarget(registrationId);
         if (row == null) {
@@ -49,15 +51,15 @@ public class CheckInService {
         long expiresAt = Instant.now().plusSeconds(CHECK_IN_CODE_TTL_SECONDS).getEpochSecond();
         String payload = registrationId + ":" + expiresAt;
         String token = base64(payload) + "." + sign(payload);
-        return Map.of(
-                "registrationId", registrationId,
-                "checkInCode", token,
-                "expiresAt", LocalDateTime.ofInstant(Instant.ofEpochSecond(expiresAt), ZoneId.systemDefault()).toString()
+        return new CheckInCodeVO(
+                registrationId,
+                token,
+                LocalDateTime.ofInstant(Instant.ofEpochSecond(expiresAt), ZoneId.systemDefault()).toString()
         );
     }
 
     @Transactional
-    public Map<String, Object> checkIn(CheckInRequest request) {
+    public CheckInResultVO checkIn(CheckInRequest request) {
         CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
         int registrationId = parseCode(request.checkInCode());
         Map<String, Object> row = registrationMapper.findCheckInTargetForUpdate(registrationId);
@@ -68,18 +70,14 @@ public class CheckInService {
 
         String status = (String) row.get("status");
         if ("CHECKED_IN".equals(status)) {
-            return Map.of("registrationId", registrationId, "registrationStatus", "CHECKED_IN");
+            return new CheckInResultVO(registrationId, "CHECKED_IN", null);
         }
         if (!"ENROLLED".equals(status)) {
             throw new BusinessException(40903, "只有正选报名可以签到");
         }
         registrationMapper.markCheckedIn(registrationId);
         creditRecordMapper.insertCheckInCredit(user.id(), registrationId);
-        return Map.of(
-                "registrationId", registrationId,
-                "registrationStatus", "CHECKED_IN",
-                "checkInTime", LocalDateTime.now().toString()
-        );
+        return new CheckInResultVO(registrationId, "CHECKED_IN", LocalDateTime.now().toString());
     }
 
     private void validateCanGenerateCode(Map<String, Object> row, CurrentUser student) {
