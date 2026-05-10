@@ -6,21 +6,37 @@ import com.campus.activity.common.CurrentUser;
 import com.campus.activity.common.PageResult;
 import com.campus.activity.common.Role;
 import com.campus.activity.model.dto.FeedbackRequest;
-import org.springframework.jdbc.core.JdbcTemplate;
+import com.campus.activity.model.mapper.ActivityFeedbackMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Service
 @Transactional(readOnly = true)
 public class FeedbackService {
-    private final JdbcTemplate jdbcTemplate;
+    private static final int LOW_RATING_THRESHOLD = 3;
+    private static final int KEYWORD_LIMIT = 8;
+    private static final Pattern KEYWORD_SPLITTER = Pattern.compile("[\\s,，。.!！?？;；:：、（）()【】\\[\\]《》<>\"'“”‘’]+");
+    private static final List<String> STOP_WORDS = List.of(
+            "活动", "感觉", "比较", "一个", "这个", "可以", "还是", "没有", "不是", "我们", "他们", "非常",
+            "有点", "希望", "建议", "整体", "参加", "体验", "不错", "很好"
+    );
+    private static final List<String> BUSINESS_KEYWORDS = List.of(
+            "场地", "时间", "流程", "组织", "签到", "内容", "互动", "通知", "设备", "座位",
+            "老师", "志愿者", "排队", "交通", "收获", "讲解", "秩序", "体验"
+    );
 
-    public FeedbackService(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    private final ActivityFeedbackMapper feedbackMapper;
+
+    public FeedbackService(ActivityFeedbackMapper feedbackMapper) {
+        this.feedbackMapper = feedbackMapper;
     }
 
     @Transactional
@@ -39,72 +55,42 @@ public class FeedbackService {
 
     public Map<String, Object> my(int activityId) {
         CurrentUser student = Access.require(Role.STUDENT);
-        var rows = jdbcTemplate.queryForList("""
-                SELECT f.feedback_id AS feedbackId, f.rating, f.content,
-                       f.created_at AS createdAt, f.updated_at AS updatedAt
-                FROM ActivityFeedback f
-                WHERE f.student_id = ? AND f.activity_id = ?
-                """, student.id(), activityId);
+        var rows = feedbackMapper.findMine(student.id(), activityId);
         return rows.isEmpty() ? Map.of() : rows.get(0);
     }
 
-    public Map<String, Object> activityFeedback(int activityId, int page, int size) {
+    public Map<String, Object> activityFeedback(int activityId, int page, int size, boolean lowRatingOnly) {
         CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
         validateActivityAccess(activityId, user);
-        Map<String, Object> summary = jdbcTemplate.queryForMap("""
-                SELECT COUNT(*) AS feedbackCount,
-                       COALESCE(ROUND(AVG(rating), 1), 0) AS averageRating,
-                       SUM(CASE WHEN rating >= 4 THEN 1 ELSE 0 END) AS positiveCount
-                FROM ActivityFeedback
-                WHERE activity_id = ?
-                """, activityId);
-        long total = ((Number) summary.get("feedbackCount")).longValue();
-        List<Map<String, Object>> list = jdbcTemplate.queryForList("""
-                SELECT f.feedback_id AS feedbackId, u.username AS studentName, u.student_no AS studentNo,
-                       f.rating, f.content, f.created_at AS createdAt, f.updated_at AS updatedAt
-                FROM ActivityFeedback f
-                JOIN User u ON f.student_id = u.user_id
-                WHERE f.activity_id = ?
-                ORDER BY f.updated_at DESC
-                LIMIT ?, ?
-                """, activityId, (page - 1) * size, size);
+
+        Map<String, Object> summary = feedbackMapper.activitySummary(activityId);
+        int offset = (page - 1) * size;
+        long filteredTotal = lowRatingOnly
+                ? feedbackMapper.countLowRatingActivityRecords(activityId, LOW_RATING_THRESHOLD)
+                : feedbackMapper.countActivityRecords(activityId);
+        List<Map<String, Object>> records = lowRatingOnly
+                ? feedbackMapper.findLowRatingActivityRecords(activityId, LOW_RATING_THRESHOLD, offset, size)
+                : feedbackMapper.findActivityRecords(activityId, offset, size);
         return Map.of(
                 "summary", normalizeSummary(summary),
-                "records", new PageResult<>(list, total, page, size)
+                "ratingDistribution", ratingDistribution(activityId),
+                "keywords", keywords(activityId),
+                "records", new PageResult<>(records, filteredTotal, page, size)
         );
     }
 
     public Map<String, Object> overview() {
         Access.require(Role.ADMIN);
-        Map<String, Object> summary = jdbcTemplate.queryForMap("""
-                SELECT COUNT(*) AS feedbackCount,
-                       COALESCE(ROUND(AVG(rating), 1), 0) AS averageRating,
-                       SUM(CASE WHEN rating >= 4 THEN 1 ELSE 0 END) AS positiveCount
-                FROM ActivityFeedback
-                """);
-        List<Map<String, Object>> topActivities = jdbcTemplate.queryForList("""
-                SELECT a.activity_id AS activityId, a.title,
-                       COUNT(f.feedback_id) AS feedbackCount,
-                       COALESCE(ROUND(AVG(f.rating), 1), 0) AS averageRating
-                FROM Activity a
-                LEFT JOIN ActivityFeedback f ON a.activity_id = f.activity_id
-                GROUP BY a.activity_id, a.title
-                HAVING feedbackCount > 0
-                ORDER BY averageRating DESC, feedbackCount DESC
-                LIMIT 5
-                """);
         return Map.of(
-                "summary", normalizeSummary(summary),
-                "topActivities", topActivities
+                "summary", normalizeSummary(feedbackMapper.globalSummary()),
+                "ratingDistribution", ratingDistribution(null),
+                "keywords", keywords(null),
+                "topActivities", feedbackMapper.topActivities()
         );
     }
 
     private Map<String, Object> findCheckedInRegistration(int studentId, int activityId) {
-        var registrations = jdbcTemplate.queryForList("""
-                SELECT registration_id, status
-                FROM Registration
-                WHERE student_id = ? AND activity_id = ?
-                """, studentId, activityId);
+        var registrations = feedbackMapper.findRegistration(studentId, activityId);
         if (registrations.isEmpty()) {
             throw new BusinessException(40301, "只有报名学生可以评价活动");
         }
@@ -116,30 +102,19 @@ public class FeedbackService {
     }
 
     private void upsertFeedback(int activityId, FeedbackRequest request, int studentId, int registrationId) {
-        var existing = jdbcTemplate.queryForList("""
-                SELECT feedback_id
-                FROM ActivityFeedback
-                WHERE registration_id = ?
-                """, registrationId);
+        var existing = feedbackMapper.findByRegistration(registrationId);
         if (existing.isEmpty()) {
-            jdbcTemplate.update("""
-                    INSERT INTO ActivityFeedback(registration_id, activity_id, student_id, rating, content)
-                    VALUES (?, ?, ?, ?, ?)
-                    """, registrationId, activityId, studentId, request.rating(), request.content());
+            feedbackMapper.insertFeedback(registrationId, activityId, studentId, request.rating(), request.content());
             return;
         }
-        jdbcTemplate.update("""
-                UPDATE ActivityFeedback
-                SET rating = ?, content = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE registration_id = ?
-                """, request.rating(), request.content(), registrationId);
+        feedbackMapper.updateFeedback(registrationId, request.rating(), request.content());
     }
 
     private void validateActivityAccess(int activityId, CurrentUser user) {
         if (user.role() == Role.ADMIN) {
             return;
         }
-        Integer ownerId = jdbcTemplate.queryForObject("SELECT organizer_id FROM Activity WHERE activity_id = ?", Integer.class, activityId);
+        Integer ownerId = feedbackMapper.findActivityOwner(activityId);
         if (ownerId == null || ownerId != user.id()) {
             throw new BusinessException(40301, "只能查看自己活动的反馈");
         }
@@ -150,10 +125,68 @@ public class FeedbackService {
         BigDecimal averageRating = summary.get("averageRating") instanceof BigDecimal value ? value : BigDecimal.ZERO;
         long positiveCount = summary.get("positiveCount") == null ? 0 : ((Number) summary.get("positiveCount")).longValue();
         int positiveRate = feedbackCount == 0 ? 0 : Math.round((positiveCount * 100f) / feedbackCount);
+        long lowRatingCount = summary.get("lowRatingCount") == null ? 0 : ((Number) summary.get("lowRatingCount")).longValue();
         return Map.of(
                 "feedbackCount", feedbackCount,
                 "averageRating", averageRating,
-                "positiveRate", positiveRate
+                "positiveRate", positiveRate,
+                "lowRatingCount", lowRatingCount
         );
+    }
+
+    private List<Map<String, Object>> ratingDistribution(Integer activityId) {
+        List<Map<String, Object>> rows = activityId == null
+                ? feedbackMapper.globalRatingDistribution()
+                : feedbackMapper.activityRatingDistribution(activityId);
+        Map<Integer, Long> counts = new HashMap<>();
+        long total = 0;
+        for (Map<String, Object> row : rows) {
+            int rating = ((Number) row.get("rating")).intValue();
+            long count = ((Number) row.get("count")).longValue();
+            counts.put(rating, count);
+            total += count;
+        }
+        List<Map<String, Object>> distribution = new ArrayList<>();
+        for (int rating = 5; rating >= 1; rating--) {
+            long count = counts.getOrDefault(rating, 0L);
+            int rate = total == 0 ? 0 : Math.round((count * 100f) / total);
+            distribution.add(Map.of("rating", rating, "count", count, "rate", rate));
+        }
+        return distribution;
+    }
+
+    private List<Map<String, Object>> keywords(Integer activityId) {
+        Map<String, Integer> counts = new HashMap<>();
+        List<String> contents = activityId == null
+                ? feedbackMapper.globalFeedbackContents()
+                : feedbackMapper.activityFeedbackContents(activityId);
+        for (String content : contents) {
+            collectBusinessKeywords(content, counts);
+            collectTokenKeywords(content, counts);
+        }
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue(Comparator.reverseOrder())
+                        .thenComparing(Map.Entry.comparingByKey()))
+                .limit(KEYWORD_LIMIT)
+                .map(entry -> Map.<String, Object>of("keyword", entry.getKey(), "count", entry.getValue()))
+                .toList();
+    }
+
+    private void collectBusinessKeywords(String content, Map<String, Integer> counts) {
+        for (String keyword : BUSINESS_KEYWORDS) {
+            if (content.contains(keyword)) {
+                counts.merge(keyword, 1, Integer::sum);
+            }
+        }
+    }
+
+    private void collectTokenKeywords(String content, Map<String, Integer> counts) {
+        for (String token : KEYWORD_SPLITTER.split(content)) {
+            String normalized = token.trim();
+            if (normalized.length() < 2 || normalized.length() > 12 || STOP_WORDS.contains(normalized)) {
+                continue;
+            }
+            counts.merge(normalized, 1, Integer::sum);
+        }
     }
 }

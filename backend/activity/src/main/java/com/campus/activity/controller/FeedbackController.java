@@ -36,8 +36,9 @@ public class FeedbackController {
     @GetMapping("/activities/{activityId}/feedback")
     public Result<Map<String, Object>> activityFeedback(@PathVariable int activityId,
                                                         @RequestParam(defaultValue = "1") int page,
-                                                        @RequestParam(defaultValue = "20") int size) {
-        return Result.success(feedbackService.activityFeedback(activityId, page, size));
+                                                        @RequestParam(defaultValue = "20") int size,
+                                                        @RequestParam(defaultValue = "false") boolean lowRatingOnly) {
+        return Result.success(feedbackService.activityFeedback(activityId, page, size, lowRatingOnly));
     }
 
     @GetMapping("/feedback/overview")

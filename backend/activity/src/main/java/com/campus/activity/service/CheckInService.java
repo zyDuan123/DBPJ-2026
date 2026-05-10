@@ -5,8 +5,9 @@ import com.campus.activity.common.BusinessException;
 import com.campus.activity.common.CurrentUser;
 import com.campus.activity.common.Role;
 import com.campus.activity.model.dto.CheckInRequest;
+import com.campus.activity.model.mapper.CreditRecordMapper;
+import com.campus.activity.model.mapper.RegistrationMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,25 +26,24 @@ public class CheckInService {
     private static final int CHECK_IN_CODE_TTL_SECONDS = 2 * 3600;
     private static final String HMAC_ALGORITHM = "HmacSHA256";
 
-    private final JdbcTemplate jdbcTemplate;
+    private final RegistrationMapper registrationMapper;
+    private final CreditRecordMapper creditRecordMapper;
     private final String secret;
 
-    public CheckInService(JdbcTemplate jdbcTemplate, @Value("${app.auth-secret}") String secret) {
-        this.jdbcTemplate = jdbcTemplate;
+    public CheckInService(RegistrationMapper registrationMapper,
+                          CreditRecordMapper creditRecordMapper,
+                          @Value("${app.auth-secret}") String secret) {
+        this.registrationMapper = registrationMapper;
+        this.creditRecordMapper = creditRecordMapper;
         this.secret = secret;
     }
 
     public Map<String, Object> code(int registrationId) {
         CurrentUser student = Access.require(Role.STUDENT);
-        var rows = jdbcTemplate.queryForList("""
-                SELECT r.registration_id, r.student_id, r.status, a.end_time
-                FROM Registration r JOIN Activity a ON r.activity_id = a.activity_id
-                WHERE r.registration_id = ?
-                """, registrationId);
-        if (rows.isEmpty()) {
+        Map<String, Object> row = registrationMapper.findCheckInCodeTarget(registrationId);
+        if (row == null) {
             throw new BusinessException(40401, "报名记录不存在");
         }
-        Map<String, Object> row = rows.get(0);
         validateCanGenerateCode(row, student);
 
         long expiresAt = Instant.now().plusSeconds(CHECK_IN_CODE_TTL_SECONDS).getEpochSecond();
@@ -60,16 +60,10 @@ public class CheckInService {
     public Map<String, Object> checkIn(CheckInRequest request) {
         CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
         int registrationId = parseCode(request.checkInCode());
-        var rows = jdbcTemplate.queryForList("""
-                SELECT r.registration_id, r.status, a.organizer_id
-                FROM Registration r JOIN Activity a ON r.activity_id = a.activity_id
-                WHERE r.registration_id = ?
-                FOR UPDATE
-                """, registrationId);
-        if (rows.isEmpty()) {
+        Map<String, Object> row = registrationMapper.findCheckInTargetForUpdate(registrationId);
+        if (row == null) {
             throw new BusinessException(40401, "报名记录不存在");
         }
-        Map<String, Object> row = rows.get(0);
         validateCanCheckIn(row, user);
 
         String status = (String) row.get("status");
@@ -79,17 +73,8 @@ public class CheckInService {
         if (!"ENROLLED".equals(status)) {
             throw new BusinessException(40903, "只有正选报名可以签到");
         }
-        jdbcTemplate.update("""
-                UPDATE Registration
-                SET status = 'CHECKED_IN', check_in_time = CURRENT_TIMESTAMP
-                WHERE registration_id = ?
-                """, registrationId);
-        jdbcTemplate.update("""
-                INSERT IGNORE INTO CreditRecord(student_id, activity_id, registration_id, change_value, reason_type, reason, operator_id)
-                SELECT r.student_id, r.activity_id, r.registration_id, 1, 'CHECK_IN', '按时完成活动签到', ?
-                FROM Registration r
-                WHERE r.registration_id = ?
-                """, user.id(), registrationId);
+        registrationMapper.markCheckedIn(registrationId);
+        creditRecordMapper.insertCheckInCredit(user.id(), registrationId);
         return Map.of(
                 "registrationId", registrationId,
                 "registrationStatus", "CHECKED_IN",
@@ -98,7 +83,7 @@ public class CheckInService {
     }
 
     private void validateCanGenerateCode(Map<String, Object> row, CurrentUser student) {
-        if (((Number) row.get("student_id")).intValue() != student.id()) {
+        if (((Number) row.get("studentId")).intValue() != student.id()) {
             throw new BusinessException(40301, "只能生成自己的签到码");
         }
         if (!"ENROLLED".equals(row.get("status"))) {
@@ -107,7 +92,7 @@ public class CheckInService {
     }
 
     private void validateCanCheckIn(Map<String, Object> row, CurrentUser user) {
-        int organizerId = ((Number) row.get("organizer_id")).intValue();
+        int organizerId = ((Number) row.get("organizerId")).intValue();
         if (user.role() != Role.ADMIN && organizerId != user.id()) {
             throw new BusinessException(40301, "只能核销自己活动的签到");
         }

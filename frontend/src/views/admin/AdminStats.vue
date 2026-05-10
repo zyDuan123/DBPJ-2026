@@ -3,10 +3,11 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">统计概览</h1>
-        <p class="page-subtitle">面向管理员的运行视图，帮助快速判断活动供给、报名转化和场地使用情况。</p>
+        <p class="page-subtitle">面向管理员的运行视图，快速判断活动供给、报名转化、反馈质量和信用风险。</p>
       </div>
       <el-button @click="load">刷新</el-button>
     </div>
+
     <div class="metric-grid">
       <div class="metric"><span>活动总数</span><strong>{{ overview.activityCount }}</strong></div>
       <div class="metric"><span>待审核</span><strong>{{ overview.pendingReviewCount }}</strong></div>
@@ -14,8 +15,10 @@
       <div class="metric"><span>报名记录</span><strong>{{ overview.registrationCount }}</strong></div>
       <div class="metric"><span>已签到</span><strong>{{ overview.checkedInCount }}</strong></div>
       <div class="metric"><span>评价均分</span><strong>{{ feedbackSummary.averageRating || 0 }}</strong></div>
+      <div class="metric"><span>低分反馈</span><strong>{{ feedbackSummary.lowRatingCount || 0 }}</strong></div>
       <div class="metric"><span>缺勤记录</span><strong>{{ creditSummary.absentCount || 0 }}</strong></div>
     </div>
+
     <div class="page-split" style="margin-top: 16px">
       <div class="panel">
         <div class="table-title">
@@ -23,10 +26,10 @@
           <span class="muted">按活动数量和场地数量观察资源分布</span>
         </div>
         <el-table :data="campusUsage" stripe>
-            <el-table-column prop="campusName" label="校区" />
-            <el-table-column prop="activityCount" label="活动数" />
-            <el-table-column prop="venueCount" label="场地数" />
-          </el-table>
+          <el-table-column prop="campusName" label="校区" />
+          <el-table-column prop="activityCount" label="活动数" />
+          <el-table-column prop="venueCount" label="场地数" />
+        </el-table>
       </div>
       <div class="soft-panel">
         <h2 class="section-title">运行摘要</h2>
@@ -46,17 +49,19 @@
         </div>
       </div>
     </div>
+
     <div class="panel" style="margin-top: 16px">
       <div class="table-title">
         <h2 class="section-title">分类热度</h2>
         <span class="muted">辅助判断活动类型供给是否均衡</span>
       </div>
       <el-table :data="categoryPopularity" stripe>
-            <el-table-column prop="categoryName" label="分类" />
-            <el-table-column prop="activityCount" label="活动数" />
-            <el-table-column prop="averageEnrollment" label="平均报名" />
-          </el-table>
+        <el-table-column prop="categoryName" label="分类" />
+        <el-table-column prop="activityCount" label="活动数" />
+        <el-table-column prop="averageEnrollment" label="平均报名" />
+      </el-table>
     </div>
+
     <div class="panel" style="margin-top: 16px">
       <div class="table-title">
         <h2 class="section-title">高分活动反馈</h2>
@@ -68,6 +73,34 @@
         <el-table-column prop="averageRating" label="平均评分" width="120" />
       </el-table>
     </div>
+
+    <div class="page-split" style="margin-top: 16px">
+      <div class="panel">
+        <div class="table-title">
+          <h2 class="section-title">全站评分分布</h2>
+          <span class="muted">用于观察整体满意度结构</span>
+        </div>
+        <div class="rating-bars">
+          <div v-for="item in feedbackDistribution" :key="item.rating" class="rating-bar-row">
+            <span>{{ item.rating }} 星</span>
+            <div class="rating-bar-track">
+              <i :style="{ width: `${item.rate || 0}%` }" />
+            </div>
+            <strong>{{ item.count }}</strong>
+          </div>
+        </div>
+      </div>
+      <div class="soft-panel">
+        <h2 class="section-title">反馈关键词</h2>
+        <div v-if="feedbackKeywords.length" class="keyword-cloud">
+          <el-tag v-for="item in feedbackKeywords" :key="item.keyword" effect="plain">
+            {{ item.keyword }} {{ item.count }}
+          </el-tag>
+        </div>
+        <div v-else class="muted">暂无可提取的关键词</div>
+      </div>
+    </div>
+
     <div class="panel" style="margin-top: 16px">
       <div class="table-title">
         <h2 class="section-title">信用风险学生</h2>
@@ -94,6 +127,8 @@ const campusUsage = ref<any[]>([])
 const categoryPopularity = ref<any[]>([])
 const feedbackSummary = ref<any>({})
 const topFeedbackActivities = ref<any[]>([])
+const feedbackDistribution = ref<any[]>([])
+const feedbackKeywords = ref<any[]>([])
 const creditSummary = ref<any>({})
 const riskStudents = ref<any[]>([])
 const checkInRate = computed(() => {
@@ -109,6 +144,8 @@ async function load() {
   const feedback = await getFeedbackOverview() as any
   feedbackSummary.value = feedback.summary || {}
   topFeedbackActivities.value = feedback.topActivities || []
+  feedbackDistribution.value = feedback.ratingDistribution || []
+  feedbackKeywords.value = feedback.keywords || []
   const credit = await getCreditOverview() as any
   creditSummary.value = credit.summary || {}
   riskStudents.value = credit.riskStudents || []

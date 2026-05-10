@@ -3,8 +3,9 @@ package com.campus.activity.service;
 import com.campus.activity.common.BusinessException;
 import com.campus.activity.common.CurrentUser;
 import com.campus.activity.common.Role;
+import com.campus.activity.model.entity.User;
+import com.campus.activity.model.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
@@ -12,29 +13,23 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
-import java.util.Map;
 
 @Service
 public class AuthService {
-    private final JdbcTemplate jdbcTemplate;
+    private final UserMapper userMapper;
     private final String secret;
 
-    public AuthService(JdbcTemplate jdbcTemplate, @Value("${app.auth-secret}") String secret) {
-        this.jdbcTemplate = jdbcTemplate;
+    public AuthService(UserMapper userMapper, @Value("${app.auth-secret}") String secret) {
+        this.userMapper = userMapper;
         this.secret = secret;
     }
 
     public CurrentUser authenticate(String username, String password) {
-        var users = jdbcTemplate.queryForList("""
-                SELECT user_id, username, role, student_no, phone
-                FROM User
-                WHERE (student_no = ? OR phone = ? OR username = ?) AND password = ?
-                LIMIT 1
-                """, username, username, username, password);
-        if (users.isEmpty()) {
+        User user = userMapper.authenticate(username, password);
+        if (user == null) {
             throw new BusinessException(40101, "用户名或密码错误");
         }
-        return toUser(users.get(0));
+        return toCurrentUser(user);
     }
 
     public String issueToken(CurrentUser user) {
@@ -58,21 +53,20 @@ public class AuthService {
         if (Instant.now().getEpochSecond() > expiresAt) {
             throw new BusinessException(40101, "Token 已过期");
         }
-        var user = jdbcTemplate.queryForMap("""
-                SELECT user_id, username, role, student_no, phone
-                FROM User
-                WHERE user_id = ?
-                """, userId);
-        return toUser(user);
+        User user = userMapper.findProfile(userId);
+        if (user == null) {
+            throw new BusinessException(40101, "未登录或 Token 过期");
+        }
+        return toCurrentUser(user);
     }
 
-    private CurrentUser toUser(Map<String, Object> row) {
+    private CurrentUser toCurrentUser(User user) {
         return new CurrentUser(
-                ((Number) row.get("user_id")).intValue(),
-                (String) row.get("username"),
-                Role.valueOf((String) row.get("role")),
-                (String) row.get("student_no"),
-                (String) row.get("phone")
+                user.getUserId(),
+                user.getUsername(),
+                Role.valueOf(user.getRole()),
+                user.getStudentNo(),
+                user.getPhone()
         );
     }
 
