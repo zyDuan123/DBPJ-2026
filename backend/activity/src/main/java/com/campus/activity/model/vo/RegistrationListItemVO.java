@@ -1,5 +1,7 @@
 package com.campus.activity.model.vo;
 
+import com.campus.activity.model.row.RegistrationListItemRow;
+
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -35,6 +37,26 @@ public record RegistrationListItemVO(Integer registrationId,
                 ActivityListItemVO.stringValue(row.get("studentName")),
                 ActivityListItemVO.stringValue(row.get("studentNo")),
                 ActivityListItemVO.stringValue(row.get("phone"))
+        );
+    }
+
+    public static RegistrationListItemVO from(RegistrationListItemRow row) {
+        return new RegistrationListItemVO(
+                row.getRegistrationId(),
+                row.getRegistrationStatus(),
+                row.getQueueNo(),
+                row.getRegistrationTime(),
+                row.getCheckInTime(),
+                row.getActivityId(),
+                row.getTitle(),
+                row.getStartTime(),
+                row.getEndTime(),
+                row.getCampusName(),
+                row.getVenueName(),
+                row.getRoomNumber(),
+                row.getStudentName(),
+                row.getStudentNo(),
+                row.getPhone()
         );
     }
 }

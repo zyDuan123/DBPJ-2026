@@ -7,6 +7,7 @@ import com.campus.activity.common.Role;
 import com.campus.activity.model.dto.CheckInRequest;
 import com.campus.activity.model.mapper.CreditRecordMapper;
 import com.campus.activity.model.mapper.RegistrationMapper;
+import com.campus.activity.model.row.CheckInTargetRow;
 import com.campus.activity.model.vo.CheckInCodeVO;
 import com.campus.activity.model.vo.CheckInResultVO;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,7 +21,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Base64;
-import java.util.Map;
 
 @Service
 @Transactional(readOnly = true)
@@ -42,7 +42,7 @@ public class CheckInService {
 
     public CheckInCodeVO code(int registrationId) {
         CurrentUser student = Access.require(Role.STUDENT);
-        Map<String, Object> row = registrationMapper.findCheckInCodeTarget(registrationId);
+        CheckInTargetRow row = registrationMapper.findCheckInCodeTarget(registrationId);
         if (row == null) {
             throw new BusinessException(40401, "报名记录不存在");
         }
@@ -62,13 +62,13 @@ public class CheckInService {
     public CheckInResultVO checkIn(CheckInRequest request) {
         CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
         int registrationId = parseCode(request.checkInCode());
-        Map<String, Object> row = registrationMapper.findCheckInTargetForUpdate(registrationId);
+        CheckInTargetRow row = registrationMapper.findCheckInTargetForUpdate(registrationId);
         if (row == null) {
             throw new BusinessException(40401, "报名记录不存在");
         }
         validateCanCheckIn(row, user);
 
-        String status = (String) row.get("status");
+        String status = row.getStatus();
         if ("CHECKED_IN".equals(status)) {
             return new CheckInResultVO(registrationId, "CHECKED_IN", null);
         }
@@ -80,17 +80,17 @@ public class CheckInService {
         return new CheckInResultVO(registrationId, "CHECKED_IN", LocalDateTime.now().toString());
     }
 
-    private void validateCanGenerateCode(Map<String, Object> row, CurrentUser student) {
-        if (((Number) row.get("studentId")).intValue() != student.id()) {
+    private void validateCanGenerateCode(CheckInTargetRow row, CurrentUser student) {
+        if (!row.getStudentId().equals(student.id())) {
             throw new BusinessException(40301, "只能生成自己的签到码");
         }
-        if (!"ENROLLED".equals(row.get("status"))) {
+        if (!"ENROLLED".equals(row.getStatus())) {
             throw new BusinessException(40903, "当前报名状态不可签到");
         }
     }
 
-    private void validateCanCheckIn(Map<String, Object> row, CurrentUser user) {
-        int organizerId = ((Number) row.get("organizerId")).intValue();
+    private void validateCanCheckIn(CheckInTargetRow row, CurrentUser user) {
+        int organizerId = row.getOrganizerId();
         if (user.role() != Role.ADMIN && organizerId != user.id()) {
             throw new BusinessException(40301, "只能核销自己活动的签到");
         }
@@ -123,7 +123,7 @@ public class CheckInService {
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception ex) {
-            throw new IllegalStateException("签名失败", ex);
+            throw new IllegalStateException("签到码签名失败", ex);
         }
     }
 }

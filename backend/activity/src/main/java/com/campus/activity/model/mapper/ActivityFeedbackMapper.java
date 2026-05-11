@@ -2,6 +2,12 @@ package com.campus.activity.model.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.campus.activity.model.entity.ActivityFeedback;
+import com.campus.activity.model.row.FeedbackMineRow;
+import com.campus.activity.model.row.FeedbackRecordRow;
+import com.campus.activity.model.row.FeedbackRegistrationRow;
+import com.campus.activity.model.row.FeedbackSummaryRow;
+import com.campus.activity.model.row.FeedbackTopActivityRow;
+import com.campus.activity.model.row.RatingCountRow;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -9,7 +15,6 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
-import java.util.Map;
 
 @Mapper
 public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
@@ -19,7 +24,7 @@ public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
             FROM ActivityFeedback f
             WHERE f.student_id = #{studentId} AND f.activity_id = #{activityId}
             """)
-    List<Map<String, Object>> findMine(@Param("studentId") int studentId, @Param("activityId") int activityId);
+    List<FeedbackMineRow> findMine(@Param("studentId") int studentId, @Param("activityId") int activityId);
 
     @Select("""
             SELECT COUNT(*) AS feedbackCount,
@@ -29,7 +34,7 @@ public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
             FROM ActivityFeedback
             WHERE activity_id = #{activityId}
             """)
-    Map<String, Object> activitySummary(@Param("activityId") int activityId);
+    FeedbackSummaryRow activitySummary(@Param("activityId") int activityId);
 
     @Select("""
             SELECT COUNT(*) AS feedbackCount,
@@ -38,7 +43,7 @@ public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
                    SUM(CASE WHEN rating <= 3 THEN 1 ELSE 0 END) AS lowRatingCount
             FROM ActivityFeedback
             """)
-    Map<String, Object> globalSummary();
+    FeedbackSummaryRow globalSummary();
 
     @Select("""
             SELECT f.feedback_id AS feedbackId, u.username AS studentName, u.student_no AS studentNo,
@@ -49,9 +54,9 @@ public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
             ORDER BY f.updated_at DESC
             LIMIT #{offset}, #{size}
             """)
-    List<Map<String, Object>> findActivityRecords(@Param("activityId") int activityId,
-                                                  @Param("offset") int offset,
-                                                  @Param("size") int size);
+    List<FeedbackRecordRow> findActivityRecords(@Param("activityId") int activityId,
+                                                @Param("offset") int offset,
+                                                @Param("size") int size);
 
     @Select("""
             SELECT COUNT(*)
@@ -70,10 +75,10 @@ public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
             ORDER BY f.updated_at DESC
             LIMIT #{offset}, #{size}
             """)
-    List<Map<String, Object>> findLowRatingActivityRecords(@Param("activityId") int activityId,
-                                                           @Param("lowRatingThreshold") int lowRatingThreshold,
-                                                           @Param("offset") int offset,
-                                                           @Param("size") int size);
+    List<FeedbackRecordRow> findLowRatingActivityRecords(@Param("activityId") int activityId,
+                                                         @Param("lowRatingThreshold") int lowRatingThreshold,
+                                                         @Param("offset") int offset,
+                                                         @Param("size") int size);
 
     @Select("""
             SELECT COUNT(*)
@@ -95,7 +100,7 @@ public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
             ORDER BY averageRating DESC, feedbackCount DESC
             LIMIT 5
             """)
-    List<Map<String, Object>> topActivities();
+    List<FeedbackTopActivityRow> topActivities();
 
     @Select("""
             SELECT rating, COUNT(*) AS count
@@ -103,14 +108,14 @@ public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
             WHERE activity_id = #{activityId}
             GROUP BY rating
             """)
-    List<Map<String, Object>> activityRatingDistribution(@Param("activityId") int activityId);
+    List<RatingCountRow> activityRatingDistribution(@Param("activityId") int activityId);
 
     @Select("""
             SELECT rating, COUNT(*) AS count
             FROM ActivityFeedback
             GROUP BY rating
             """)
-    List<Map<String, Object>> globalRatingDistribution();
+    List<RatingCountRow> globalRatingDistribution();
 
     @Select("""
             SELECT content
@@ -134,14 +139,14 @@ public interface ActivityFeedbackMapper extends BaseMapper<ActivityFeedback> {
             FROM Registration
             WHERE student_id = #{studentId} AND activity_id = #{activityId}
             """)
-    List<Map<String, Object>> findRegistration(@Param("studentId") int studentId, @Param("activityId") int activityId);
+    List<FeedbackRegistrationRow> findRegistration(@Param("studentId") int studentId, @Param("activityId") int activityId);
 
     @Select("""
             SELECT feedback_id
             FROM ActivityFeedback
             WHERE registration_id = #{registrationId}
             """)
-    List<Map<String, Object>> findByRegistration(@Param("registrationId") int registrationId);
+    List<Integer> findByRegistration(@Param("registrationId") int registrationId);
 
     @Insert("""
             INSERT INTO ActivityFeedback(registration_id, activity_id, student_id, rating, content)

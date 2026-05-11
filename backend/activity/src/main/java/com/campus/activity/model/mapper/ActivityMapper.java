@@ -2,6 +2,10 @@ package com.campus.activity.model.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.campus.activity.model.entity.Activity;
+import com.campus.activity.model.row.ActivityDetailRow;
+import com.campus.activity.model.row.ActivityListItemRow;
+import com.campus.activity.model.row.ActivityLockRow;
+import com.campus.activity.model.row.StudentRegistrationRow;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -10,7 +14,6 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
-import java.util.Map;
 
 @Mapper
 public interface ActivityMapper extends BaseMapper<Activity> {
@@ -65,7 +68,7 @@ public interface ActivityMapper extends BaseMapper<Activity> {
             LIMIT #{offset}, #{size}
             </script>
             """)
-    List<Map<String, Object>> listActivities(@Param("studentVisible") boolean studentVisible,
+    List<ActivityListItemRow> listActivities(@Param("studentVisible") boolean studentVisible,
                                              @Param("organizerId") Integer organizerId,
                                              @Param("keyword") String keyword,
                                              @Param("campusId") Integer campusId,
@@ -89,7 +92,7 @@ public interface ActivityMapper extends BaseMapper<Activity> {
             JOIN User u ON a.organizer_id = u.user_id
             WHERE a.activity_id = #{activityId}
             """)
-    Map<String, Object> findDetail(@Param("activityId") int activityId);
+    ActivityDetailRow findDetail(@Param("activityId") int activityId);
 
     @Insert("""
             INSERT INTO Activity(title, venue_id, category_id, start_time, end_time, enroll_deadline,
@@ -162,8 +165,8 @@ public interface ActivityMapper extends BaseMapper<Activity> {
             FROM Registration
             WHERE student_id = #{studentId} AND activity_id = #{activityId}
             """)
-    Map<String, Object> findStudentRegistration(@Param("studentId") int studentId,
-                                                @Param("activityId") int activityId);
+    StudentRegistrationRow findStudentRegistration(@Param("studentId") int studentId,
+                                                   @Param("activityId") int activityId);
 
     @Select("""
             SELECT activity_id AS activityId, status, current_enrollment AS currentEnrollment,
@@ -173,7 +176,7 @@ public interface ActivityMapper extends BaseMapper<Activity> {
             WHERE activity_id = #{activityId}
             FOR UPDATE
             """)
-    Map<String, Object> lockActivity(@Param("activityId") int activityId);
+    ActivityLockRow lockActivity(@Param("activityId") int activityId);
 
     @Update("""
             UPDATE Activity

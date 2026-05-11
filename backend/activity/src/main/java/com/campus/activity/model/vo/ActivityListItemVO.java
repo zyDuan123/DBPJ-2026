@@ -1,6 +1,7 @@
 package com.campus.activity.model.vo;
 
 import com.campus.activity.common.TimeValues;
+import com.campus.activity.model.row.ActivityListItemRow;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -41,6 +42,28 @@ public record ActivityListItemVO(Integer id,
                 stringValue(row.get("status")),
                 stringValue(row.get("rejectReason")),
                 stringValue(row.get("organizerName"))
+        );
+    }
+
+    public static ActivityListItemVO from(ActivityListItemRow row) {
+        return new ActivityListItemVO(
+                row.getId(),
+                row.getTitle(),
+                row.getPosterUrl(),
+                row.getStartTime(),
+                row.getEndTime(),
+                row.getEnrollDeadline(),
+                row.getCampusName(),
+                row.getVenueName(),
+                row.getRoomNumber(),
+                row.getCategoryName(),
+                row.getVenueId(),
+                row.getCategoryId(),
+                row.getCapacityLimit(),
+                row.getCurrentEnrollment(),
+                row.getStatus(),
+                row.getRejectReason(),
+                row.getOrganizerName()
         );
     }
 

@@ -1,5 +1,8 @@
 package com.campus.activity.model.vo;
 
+import com.campus.activity.model.row.ActivityDetailRow;
+import com.campus.activity.model.row.StudentRegistrationRow;
+
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -47,6 +50,32 @@ public record ActivityDetailVO(Integer id,
                 ActivityListItemVO.intValue(row.get("organizerId")),
                 ActivityListItemVO.intValue(row.get("registrationId")),
                 ActivityListItemVO.stringValue(row.get("registrationStatus"))
+        );
+    }
+
+    public static ActivityDetailVO from(ActivityDetailRow row, StudentRegistrationRow registration) {
+        return new ActivityDetailVO(
+                row.getId(),
+                row.getTitle(),
+                row.getPosterUrl(),
+                row.getDescription(),
+                row.getStartTime(),
+                row.getEndTime(),
+                row.getEnrollDeadline(),
+                row.getCampusName(),
+                row.getVenueName(),
+                row.getRoomNumber(),
+                row.getCategoryName(),
+                row.getVenueId(),
+                row.getCategoryId(),
+                row.getCapacityLimit(),
+                row.getCurrentEnrollment(),
+                row.getStatus(),
+                row.getRejectReason(),
+                row.getOrganizerName(),
+                row.getOrganizerId(),
+                registration == null ? null : registration.getRegistrationId(),
+                registration == null ? null : registration.getRegistrationStatus()
         );
     }
 }

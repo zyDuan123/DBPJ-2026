@@ -2,6 +2,10 @@ package com.campus.activity.model.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.campus.activity.model.entity.Registration;
+import com.campus.activity.model.row.CheckInTargetRow;
+import com.campus.activity.model.row.RegistrationActionRow;
+import com.campus.activity.model.row.RegistrationListItemRow;
+import com.campus.activity.model.row.RegistrationLockRow;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
@@ -10,7 +14,6 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
-import java.util.Map;
 
 @Mapper
 public interface RegistrationMapper extends BaseMapper<Registration> {
@@ -21,7 +24,7 @@ public interface RegistrationMapper extends BaseMapper<Registration> {
             JOIN Activity a ON r.activity_id = a.activity_id
             WHERE r.registration_id = #{registrationId}
             """)
-    Map<String, Object> findCheckInCodeTarget(@Param("registrationId") int registrationId);
+    CheckInTargetRow findCheckInCodeTarget(@Param("registrationId") int registrationId);
 
     @Select("""
             SELECT r.registration_id AS registrationId, r.status, a.organizer_id AS organizerId
@@ -30,7 +33,7 @@ public interface RegistrationMapper extends BaseMapper<Registration> {
             WHERE r.registration_id = #{registrationId}
             FOR UPDATE
             """)
-    Map<String, Object> findCheckInTargetForUpdate(@Param("registrationId") int registrationId);
+    CheckInTargetRow findCheckInTargetForUpdate(@Param("registrationId") int registrationId);
 
     @Update("""
             UPDATE Registration
@@ -44,8 +47,8 @@ public interface RegistrationMapper extends BaseMapper<Registration> {
             FROM Registration
             WHERE student_id = #{studentId} AND activity_id = #{activityId}
             """)
-    Map<String, Object> findReusableRegistration(@Param("studentId") int studentId,
-                                                 @Param("activityId") int activityId);
+    RegistrationActionRow findReusableRegistration(@Param("studentId") int studentId,
+                                                   @Param("activityId") int activityId);
 
     @Select("""
             SELECT registration_id AS registrationId
@@ -106,7 +109,7 @@ public interface RegistrationMapper extends BaseMapper<Registration> {
             WHERE registration_id = #{registrationId}
             FOR UPDATE
             """)
-    Map<String, Object> lockRegistration(@Param("registrationId") int registrationId);
+    RegistrationLockRow lockRegistration(@Param("registrationId") int registrationId);
 
     @Select("""
             <script>
@@ -137,10 +140,10 @@ public interface RegistrationMapper extends BaseMapper<Registration> {
             LIMIT #{offset}, #{size}
             </script>
             """)
-    List<Map<String, Object>> listMine(@Param("studentId") int studentId,
-                                       @Param("status") String status,
-                                       @Param("offset") int offset,
-                                       @Param("size") int size);
+    List<RegistrationListItemRow> listMine(@Param("studentId") int studentId,
+                                           @Param("status") String status,
+                                           @Param("offset") int offset,
+                                           @Param("size") int size);
 
     @Select("""
             <script>
@@ -166,10 +169,10 @@ public interface RegistrationMapper extends BaseMapper<Registration> {
             LIMIT #{offset}, #{size}
             </script>
             """)
-    List<Map<String, Object>> listActivityRegistrations(@Param("activityId") int activityId,
-                                                        @Param("status") String status,
-                                                        @Param("offset") int offset,
-                                                        @Param("size") int size);
+    List<RegistrationListItemRow> listActivityRegistrations(@Param("activityId") int activityId,
+                                                            @Param("status") String status,
+                                                            @Param("offset") int offset,
+                                                            @Param("size") int size);
 
     @Update("""
             UPDATE Registration

@@ -7,6 +7,9 @@ import com.campus.activity.common.PageResult;
 import com.campus.activity.common.Role;
 import com.campus.activity.model.dto.FeedbackRequest;
 import com.campus.activity.model.mapper.ActivityFeedbackMapper;
+import com.campus.activity.model.row.FeedbackRecordRow;
+import com.campus.activity.model.row.FeedbackRegistrationRow;
+import com.campus.activity.model.row.RatingCountRow;
 import com.campus.activity.model.vo.FeedbackBoardVO;
 import com.campus.activity.model.vo.FeedbackMineVO;
 import com.campus.activity.model.vo.FeedbackOverviewVO;
@@ -19,8 +22,6 @@ import com.campus.activity.model.vo.RatingDistributionVO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -32,7 +33,7 @@ import java.util.regex.Pattern;
 public class FeedbackService {
     private static final int LOW_RATING_THRESHOLD = 3;
     private static final int KEYWORD_LIMIT = 8;
-    private static final Pattern KEYWORD_SPLITTER = Pattern.compile("[\\s,，。.!！?？;；:：、（）()【】\\[\\]《》<>\"'“”‘’]+");
+    private static final Pattern KEYWORD_SPLITTER = Pattern.compile("[\\s,，。?!！？：、（）()【】\\[\\]《》<>\"'“”‘’]+");
     private static final List<String> STOP_WORDS = List.of(
             "活动", "感觉", "比较", "一个", "这个", "可以", "还是", "没有", "不是", "我们", "他们", "非常",
             "有点", "希望", "建议", "整体", "参加", "体验", "不错", "很好"
@@ -51,8 +52,8 @@ public class FeedbackService {
     @Transactional
     public FeedbackSubmitVO submit(int activityId, FeedbackRequest request) {
         CurrentUser student = Access.require(Role.STUDENT);
-        Map<String, Object> registration = findCheckedInRegistration(student.id(), activityId);
-        int registrationId = ((Number) registration.get("registration_id")).intValue();
+        FeedbackRegistrationRow registration = findCheckedInRegistration(student.id(), activityId);
+        int registrationId = registration.getRegistrationId();
 
         upsertFeedback(activityId, request, student.id(), registrationId);
         return new FeedbackSubmitVO(activityId, registrationId, request.rating());
@@ -68,18 +69,17 @@ public class FeedbackService {
         CurrentUser user = Access.require(Role.ORGANIZER, Role.ADMIN);
         validateActivityAccess(activityId, user);
 
-        Map<String, Object> summary = feedbackMapper.activitySummary(activityId);
         int offset = (page - 1) * size;
         long filteredTotal = lowRatingOnly
                 ? feedbackMapper.countLowRatingActivityRecords(activityId, LOW_RATING_THRESHOLD)
                 : feedbackMapper.countActivityRecords(activityId);
-        List<Map<String, Object>> records = lowRatingOnly
+        List<FeedbackRecordRow> records = lowRatingOnly
                 ? feedbackMapper.findLowRatingActivityRecords(activityId, LOW_RATING_THRESHOLD, offset, size)
                 : feedbackMapper.findActivityRecords(activityId, offset, size);
         return new FeedbackBoardVO(
-                FeedbackSummaryVO.from(normalizeSummary(summary)),
-                ratingDistribution(activityId).stream().map(RatingDistributionVO::from).toList(),
-                keywords(activityId).stream().map(KeywordVO::from).toList(),
+                FeedbackSummaryVO.from(feedbackMapper.activitySummary(activityId)),
+                ratingDistribution(activityId),
+                keywords(activityId),
                 new PageResult<>(records.stream().map(FeedbackRecordVO::from).toList(), filteredTotal, page, size)
         );
     }
@@ -87,20 +87,20 @@ public class FeedbackService {
     public FeedbackOverviewVO overview() {
         Access.require(Role.ADMIN);
         return new FeedbackOverviewVO(
-                FeedbackSummaryVO.from(normalizeSummary(feedbackMapper.globalSummary())),
-                ratingDistribution(null).stream().map(RatingDistributionVO::from).toList(),
-                keywords(null).stream().map(KeywordVO::from).toList(),
+                FeedbackSummaryVO.from(feedbackMapper.globalSummary()),
+                ratingDistribution(null),
+                keywords(null),
                 feedbackMapper.topActivities().stream().map(FeedbackTopActivityVO::from).toList()
         );
     }
 
-    private Map<String, Object> findCheckedInRegistration(int studentId, int activityId) {
+    private FeedbackRegistrationRow findCheckedInRegistration(int studentId, int activityId) {
         var registrations = feedbackMapper.findRegistration(studentId, activityId);
         if (registrations.isEmpty()) {
             throw new BusinessException(40301, "只有报名学生可以评价活动");
         }
-        Map<String, Object> registration = registrations.get(0);
-        if (!"CHECKED_IN".equals(registration.get("status"))) {
+        FeedbackRegistrationRow registration = registrations.get(0);
+        if (!"CHECKED_IN".equals(registration.getStatus())) {
             throw new BusinessException(40903, "只有已签到活动可以评价");
         }
         return registration;
@@ -125,42 +125,27 @@ public class FeedbackService {
         }
     }
 
-    private Map<String, Object> normalizeSummary(Map<String, Object> summary) {
-        long feedbackCount = ((Number) summary.get("feedbackCount")).longValue();
-        BigDecimal averageRating = summary.get("averageRating") instanceof BigDecimal value ? value : BigDecimal.ZERO;
-        long positiveCount = summary.get("positiveCount") == null ? 0 : ((Number) summary.get("positiveCount")).longValue();
-        int positiveRate = feedbackCount == 0 ? 0 : Math.round((positiveCount * 100f) / feedbackCount);
-        long lowRatingCount = summary.get("lowRatingCount") == null ? 0 : ((Number) summary.get("lowRatingCount")).longValue();
-        return Map.of(
-                "feedbackCount", feedbackCount,
-                "averageRating", averageRating,
-                "positiveRate", positiveRate,
-                "lowRatingCount", lowRatingCount
-        );
-    }
-
-    private List<Map<String, Object>> ratingDistribution(Integer activityId) {
-        List<Map<String, Object>> rows = activityId == null
+    private List<RatingDistributionVO> ratingDistribution(Integer activityId) {
+        List<RatingCountRow> rows = activityId == null
                 ? feedbackMapper.globalRatingDistribution()
                 : feedbackMapper.activityRatingDistribution(activityId);
-        Map<Integer, Long> counts = new HashMap<>();
+        Map<Integer, RatingCountRow> counts = new HashMap<>();
         long total = 0;
-        for (Map<String, Object> row : rows) {
-            int rating = ((Number) row.get("rating")).intValue();
-            long count = ((Number) row.get("count")).longValue();
-            counts.put(rating, count);
-            total += count;
+        for (RatingCountRow row : rows) {
+            counts.put(row.getRating(), row);
+            total += row.getCount() == null ? 0 : row.getCount();
         }
-        List<Map<String, Object>> distribution = new ArrayList<>();
-        for (int rating = 5; rating >= 1; rating--) {
-            long count = counts.getOrDefault(rating, 0L);
-            int rate = total == 0 ? 0 : Math.round((count * 100f) / total);
-            distribution.add(Map.of("rating", rating, "count", count, "rate", rate));
-        }
-        return distribution;
+        long finalTotal = total;
+        return java.util.stream.IntStream.iterate(5, rating -> rating - 1)
+                .limit(5)
+                .mapToObj(rating -> {
+                    RatingCountRow row = counts.get(rating);
+                    return row == null ? RatingDistributionVO.empty(rating) : RatingDistributionVO.from(row, finalTotal);
+                })
+                .toList();
     }
 
-    private List<Map<String, Object>> keywords(Integer activityId) {
+    private List<KeywordVO> keywords(Integer activityId) {
         Map<String, Integer> counts = new HashMap<>();
         List<String> contents = activityId == null
                 ? feedbackMapper.globalFeedbackContents()
@@ -173,7 +158,7 @@ public class FeedbackService {
                 .sorted(Map.Entry.<String, Integer>comparingByValue(Comparator.reverseOrder())
                         .thenComparing(Map.Entry.comparingByKey()))
                 .limit(KEYWORD_LIMIT)
-                .map(entry -> Map.<String, Object>of("keyword", entry.getKey(), "count", entry.getValue()))
+                .map(entry -> KeywordVO.of(entry.getKey(), entry.getValue()))
                 .toList();
     }
 

@@ -1,5 +1,7 @@
 package com.campus.activity.model.vo;
 
+import com.campus.activity.model.row.FeedbackRecordRow;
+
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -19,6 +21,18 @@ public record FeedbackRecordVO(Integer feedbackId,
                 ActivityListItemVO.stringValue(row.get("content")),
                 ActivityListItemVO.timeValue(row.get("createdAt")),
                 ActivityListItemVO.timeValue(row.get("updatedAt"))
+        );
+    }
+
+    public static FeedbackRecordVO from(FeedbackRecordRow row) {
+        return new FeedbackRecordVO(
+                row.getFeedbackId(),
+                row.getStudentName(),
+                row.getStudentNo(),
+                row.getRating(),
+                row.getContent(),
+                row.getCreatedAt(),
+                row.getUpdatedAt()
         );
     }
 }

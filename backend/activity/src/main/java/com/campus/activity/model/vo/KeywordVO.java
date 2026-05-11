@@ -9,4 +9,8 @@ public record KeywordVO(String keyword, Integer count) {
                 ActivityListItemVO.intValue(row.get("count"))
         );
     }
+
+    public static KeywordVO of(String keyword, Integer count) {
+        return new KeywordVO(keyword, count);
+    }
 }

@@ -11,6 +11,8 @@ import com.campus.activity.model.dto.ActivityRequest;
 import com.campus.activity.model.dto.ReviewRequest;
 import com.campus.activity.model.entity.Activity;
 import com.campus.activity.model.mapper.ActivityMapper;
+import com.campus.activity.model.row.ActivityDetailRow;
+import com.campus.activity.model.row.StudentRegistrationRow;
 import com.campus.activity.model.vo.ActivityDetailVO;
 import com.campus.activity.model.vo.ActivityListItemVO;
 import com.campus.activity.model.vo.ActivityMutationVO;
@@ -18,7 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 
 @Service
 @Transactional(readOnly = true)
@@ -48,15 +49,15 @@ public class ActivityService {
     }
 
     public ActivityDetailVO detail(int activityId) {
-        Map<String, Object> detail = activityMapper.findDetail(activityId);
+        ActivityDetailRow detail = activityMapper.findDetail(activityId);
         if (detail == null) {
             throw new BusinessException(40401, "活动不存在");
         }
         CurrentUser user = AuthContext.get();
-        if (user.role() == Role.STUDENT) {
-            appendStudentRegistration(detail, user.id(), activityId);
-        }
-        return ActivityDetailVO.from(detail);
+        StudentRegistrationRow registration = user.role() == Role.STUDENT
+                ? activityMapper.findStudentRegistration(user.id(), activityId)
+                : null;
+        return ActivityDetailVO.from(detail, registration);
     }
 
     @Transactional
@@ -120,13 +121,6 @@ public class ActivityService {
         validateOwnerOrAdmin(activityId, user);
         activityMapper.cancelActivity(activityId);
         return ActivityMutationVO.status(ActivityStatus.CANCELLED.name());
-    }
-
-    private void appendStudentRegistration(Map<String, Object> detail, int studentId, int activityId) {
-        Map<String, Object> registration = activityMapper.findStudentRegistration(studentId, activityId);
-        if (registration != null) {
-            detail.putAll(registration);
-        }
     }
 
     private ActivityMutationVO approve(int activityId, int adminId) {
