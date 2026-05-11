@@ -4,7 +4,7 @@
 
 本项目是数据库系统课程实践项目，目标是实现一个以 MySQL 数据库为核心的校园活动报名 Web 系统。系统支持学生、组织者、管理员三类角色，覆盖活动资源维护、活动发布审核、学生报名、满员候补、取消递补、现场签到、反馈评价、信用分和统计看板等流程。
 
-当前版本的基础业务功能已经基本完善：一期主流程和二期核心能力均已落地，可支持完整演示与联调。后端已按四层模型逐步重构为 `controller / service / model/entity / model/mapper`，并引入 MyBatis-Plus 承担实体映射和数据库访问封装。下一阶段重点将从“补齐基础功能”转向“稳定性、体验增强、数据运营能力和工程质量”。
+当前版本的基础业务功能已经基本完善：一期主流程和二期核心能力均已落地，可支持完整演示与联调。后端已按四层模型重构为 `controller / service / model/entity / model/mapper / model/vo`，并引入 MyBatis-Plus 承担实体映射和数据库访问封装。下一阶段重点将从“补齐基础功能”转向“接口契约验证、体验增强、数据运营能力和生产化准备”。
 
 ## 2. 功能概览
 
@@ -12,12 +12,12 @@
 - 组织者端：活动创建、草稿编辑、提交审核、活动管理、报名名单、签到核销、缺勤标记、活动反馈看板。
 - 管理员端：活动审核、校区/场地/分类维护、基础统计、全站反馈概览、信用风险概览。
 - 数据库能力：主外键约束、唯一约束、检查约束、报名人数冗余字段、候补队列、签到状态。
-- 工程能力：统一响应、统一异常、角色鉴权、分层目录、MyBatis-Plus 实体和 Mapper、前后端基础构建验证。
+- 工程能力：统一响应、统一异常、角色鉴权、分层目录、MyBatis-Plus 实体和 Mapper、Response VO、核心集成测试、前后端基础构建验证。
 
 ## 3. 技术栈
 
 - 前端：Vue 3、Vite、TypeScript、Element Plus、Pinia、Vue Router、Axios
-- 后端：Spring Boot 4、Spring WebMVC、MyBatis-Plus、Spring JDBC、Bean Validation
+- 后端：Spring Boot 4、Spring WebMVC、MyBatis-Plus、Spring JDBC/HikariCP、Bean Validation
 - 数据库：MySQL 8.4.8 LTS
 - 部署辅助：Docker Compose
 
@@ -51,8 +51,16 @@ com.campus.activity
 └── model
     ├── dto                   # 请求参数对象
     ├── entity                # 数据库表实体映射
-    └── mapper                # MyBatis-Plus Mapper 与 SQL 封装
+    ├── mapper                # MyBatis-Plus Mapper 与 SQL 封装
+    └── vo                    # Response View Objects，稳定接口响应契约
 ```
+
+当前后端分层状态：
+
+- Controller 保持薄层，只负责参数接收、校验注解和调用 Service。
+- Service 承担权限校验、事务边界、业务规则和状态流转。
+- Mapper 封装数据库访问，`service/` 中不再直接拼接 SQL 或注入 `JdbcTemplate`。
+- Entity 对应核心数据库表，VO 用于接口响应，避免直接向前端暴露数据库实体或松散 Map。
 
 ## 5. 环境要求
 
@@ -212,7 +220,7 @@ npm run build
 | 组织者 | `计算机协会` 或 `13800000002` |
 | 管理员 | `系统管理员` 或 `13800000003` |
 
-## 10. API 测试
+## 10. 测试与质量验证
 
 项目提供了 PowerShell smoke test，覆盖登录、用户信息、字典、活动、审核、报名、取消、签到和统计接口。
 
@@ -241,17 +249,36 @@ powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 -Port 18080
 ALL API SMOKE TESTS PASSED
 ```
 
-当前开发过程中的构建验证：
+后端集成测试：
 
 ```bash
 cd backend/activity
 mvn test
 ```
 
+当前后端测试覆盖：
+
+- Spring Boot 应用上下文启动。
+- 报名满员进入候补。
+- 正选取消后候补第一位自动转正。
+- 签到核销幂等，重复核销不重复写入信用流水。
+- 已签到活动评价可重复提交并更新原评价。
+- 活动结束后缺勤扣分只写入一次。
+- 报名截止后不能报名。
+- 学生不能标记缺勤。
+- 组织者不能查看非本人活动名单。
+- 学生不能取消他人报名。
+- 已签到报名不能取消。
+- 未签到活动不能提交评价。
+- 学生不能生成他人签到码。
+- 签到码格式错误会被拒绝。
+- 组织者不能修改已发布活动。
+- 审核状态非法和审核结果非法会被拒绝。
+
 最近一次后端验证结果：
 
 ```text
-Tests run: 1, Failures: 0, Errors: 0
+Tests run: 14, Failures: 0, Errors: 0
 BUILD SUCCESS
 ```
 
@@ -318,7 +345,7 @@ npm.cmd run dev
 
 基础功能完成后，建议优先审核以下方向：
 
-- 工程质量：补充活动、报名、候补、缺勤等关键事务测试，并逐步明确 Response DTO/VO。
+- 工程质量：补充并发、接口级鉴权和 JSON 字段契约测试。
 - 用户体验：站内通知、审核结果提醒、候补转正提醒、缺勤扣分提醒。
 - 数据运营：反馈关键词优化、低分反馈跟踪、活动复盘导出、统计图表增强。
 - 管理能力：审计日志、管理员操作留痕、报名名单 Excel 导出。
