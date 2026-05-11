@@ -9,13 +9,12 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface UserMapper extends BaseMapper<User> {
     @Select("""
-            SELECT user_id AS userId, username, role, student_no AS studentNo, phone
+            SELECT user_id AS userId, username, role, student_no AS studentNo, password, phone
             FROM User
             WHERE (student_no = #{login} OR phone = #{login} OR username = #{login})
-              AND password = #{password}
             LIMIT 1
             """)
-    User authenticate(@Param("login") String login, @Param("password") String password);
+    User findByLogin(@Param("login") String login);
 
     @Select("""
             SELECT user_id AS userId, username, role, student_no AS studentNo, phone

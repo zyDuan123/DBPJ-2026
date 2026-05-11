@@ -23,7 +23,7 @@ CREATE TABLE User (
     role VARCHAR(20) NOT NULL COMMENT 'STUDENT / ORGANIZER / ADMIN',
     username VARCHAR(50) NOT NULL COMMENT '姓名',
     student_no VARCHAR(20) UNIQUE COMMENT '学号，学生账号使用',
-    password VARCHAR(255) NOT NULL COMMENT '加密后的登录密码；演示环境可使用明文初始化后再替换',
+    password VARCHAR(255) NOT NULL COMMENT 'PBKDF2 哈希后的登录密码',
     phone VARCHAR(20) UNIQUE NOT NULL COMMENT '联系电话',
     CONSTRAINT chk_user_role CHECK (role IN ('STUDENT', 'ORGANIZER', 'ADMIN'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -137,11 +137,11 @@ CREATE INDEX idx_credit_student_time ON CreditRecord(student_id, created_at);
 CREATE INDEX idx_credit_activity_reason ON CreditRecord(activity_id, reason_type);
 CREATE INDEX idx_venue_campus ON Venue(campus_id);
 
--- 演示初始化数据，密码字段为演示明文；正式环境应替换为哈希。
+-- 演示初始化数据，默认登录密码均为 123456，数据库只保存 PBKDF2 哈希。
 INSERT INTO User(role, username, student_no, password, phone) VALUES
-('STUDENT', '学生张三', '20230001', '123456', '13800000001'),
-('ORGANIZER', '计算机协会', NULL, '123456', '13800000002'),
-('ADMIN', '系统管理员', NULL, '123456', '13800000003');
+('STUDENT', '学生张三', '20230001', 'pbkdf2$120000$ZGJwai0yMDI2LXN0dWRlbnQtc2VlZA==$8Qp3YWW+CCkG53R6RiFjJHtofp7RjSeqMnd2lIiWiNY=', '13800000001'),
+('ORGANIZER', '计算机协会', NULL, 'pbkdf2$120000$ZGJwai0yMDI2LW9yZ2FuaXplci1zZWVk$Viio6kNxospwiFm3piu3fJy2m2fe0A1eDo/IsGFZfI8=', '13800000002'),
+('ADMIN', '系统管理员', NULL, 'pbkdf2$120000$ZGJwai0yMDI2LWFkbWluLXNlZWQ=$6aTjSynvefikLgDvcDa2aX2kpo0dnT+guS8//Q6FKFQ=', '13800000003');
 
 INSERT INTO Campus(campus_name, location) VALUES
 ('邯郸校区', '上海市杨浦区邯郸路'),

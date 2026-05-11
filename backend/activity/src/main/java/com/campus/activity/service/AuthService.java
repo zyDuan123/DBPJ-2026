@@ -16,24 +16,31 @@ import java.util.Base64;
 
 @Service
 public class AuthService {
+    private static final String HMAC_ALGORITHM = "HmacSHA256";
+    private static final int TOKEN_TTL_SECONDS = 7 * 24 * 3600;
+
     private final UserMapper userMapper;
+    private final PasswordService passwordService;
     private final String secret;
 
-    public AuthService(UserMapper userMapper, @Value("${app.auth-secret}") String secret) {
+    public AuthService(UserMapper userMapper,
+                       PasswordService passwordService,
+                       @Value("${app.auth-secret}") String secret) {
         this.userMapper = userMapper;
+        this.passwordService = passwordService;
         this.secret = secret;
     }
 
     public CurrentUser authenticate(String username, String password) {
-        User user = userMapper.authenticate(username, password);
-        if (user == null) {
+        User user = userMapper.findByLogin(username);
+        if (user == null || !passwordService.matches(password, user.getPassword())) {
             throw new BusinessException(40101, "用户名或密码错误");
         }
         return toCurrentUser(user);
     }
 
     public String issueToken(CurrentUser user) {
-        long expiresAt = Instant.now().plusSeconds(7 * 24 * 3600).getEpochSecond();
+        long expiresAt = Instant.now().plusSeconds(TOKEN_TTL_SECONDS).getEpochSecond();
         String payload = user.id() + ":" + expiresAt;
         return base64(payload) + "." + sign(payload);
     }
@@ -76,11 +83,11 @@ public class AuthService {
 
     private String sign(String payload) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
             return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception ex) {
-            throw new IllegalStateException("签名失败", ex);
+            throw new IllegalStateException("Token signing failed", ex);
         }
     }
 }

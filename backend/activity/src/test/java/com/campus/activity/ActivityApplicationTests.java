@@ -12,6 +12,7 @@ import com.campus.activity.model.vo.CheckInCodeVO;
 import com.campus.activity.model.vo.CheckInResultVO;
 import com.campus.activity.model.vo.RegistrationActionVO;
 import com.campus.activity.service.ActivityService;
+import com.campus.activity.service.AuthService;
 import com.campus.activity.service.CheckInService;
 import com.campus.activity.service.FeedbackService;
 import com.campus.activity.service.RegistrationService;
@@ -35,6 +36,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 class ActivityApplicationTests {
+    private static final String TEST_PASSWORD_HASH =
+            "pbkdf2$120000$ZGJwai0yMDI2LXRlc3Qtc2VlZA==$Z7kG5pEEo62BsGNBwn7JqwppwrnIYLeR4lTvLrVzz6M=";
+
     private final List<Integer> activityIds = new ArrayList<>();
     private final List<Integer> venueIds = new ArrayList<>();
     private final List<Integer> categoryIds = new ArrayList<>();
@@ -48,6 +52,9 @@ class ActivityApplicationTests {
     private ActivityService activityService;
 
     @Autowired
+    private AuthService authService;
+
+    @Autowired
     private RegistrationService registrationService;
 
     @Autowired
@@ -58,6 +65,16 @@ class ActivityApplicationTests {
 
     @Test
     void contextLoads() {
+    }
+
+    @Test
+    void loginAcceptsHashedPasswordAndRejectsWrongPassword() {
+        int userId = insertUser("STUDENT", "login-student", "L" + Long.toString(System.nanoTime()).substring(0, 12), uniquePhone("199"));
+
+        CurrentUser currentUser = authService.authenticate("login-student", "123456");
+        assertThat(currentUser.id()).isEqualTo(userId);
+
+        assertBusinessCode(() -> authService.authenticate("login-student", "wrong-password"), 40101);
     }
 
     @Test
@@ -324,8 +341,8 @@ class ActivityApplicationTests {
     private int insertUser(String role, String username, String studentNo, String phone) {
         return insertAndTrack(userIds, """
                 INSERT INTO User(role, username, student_no, password, phone)
-                VALUES (?, ?, ?, '123456', ?)
-                """, role, username, studentNo, phone);
+                VALUES (?, ?, ?, ?, ?)
+                """, role, username, studentNo, TEST_PASSWORD_HASH, phone);
     }
 
     private int insertAndTrack(List<Integer> target, String sql, Object... args) {

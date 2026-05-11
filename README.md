@@ -214,6 +214,8 @@ npm run build
 123456
 ```
 
+数据库中的密码字段保存为 PBKDF2 哈希，不保存明文。旧库如果仍是明文种子密码，可执行 `sql/migrate_password_hash.sql` 主动迁移。
+
 | 角色 | 登录名 |
 | :--- | :--- |
 | 学生 | `20230001` |
@@ -274,11 +276,12 @@ mvn test
 - 签到码格式错误会被拒绝。
 - 组织者不能修改已发布活动。
 - 审核状态非法和审核结果非法会被拒绝。
+- 登录使用 PBKDF2 哈希校验，错误密码会被拒绝。
 
 最近一次后端验证结果：
 
 ```text
-Tests run: 14, Failures: 0, Errors: 0
+Tests run: 15, Failures: 0, Errors: 0
 BUILD SUCCESS
 ```
 
@@ -310,6 +313,16 @@ docker compose up -d mysql
 ```text
 username: campus
 password: campus123
+```
+
+后端支持通过环境变量覆盖敏感配置：
+
+```text
+DB_URL
+DB_USERNAME
+DB_PASSWORD
+APP_AUTH_SECRET
+APP_PASSWORD_HASH_ITERATIONS
 ```
 
 ### 11.2 PowerShell 无法运行 npm
@@ -349,4 +362,4 @@ npm.cmd run dev
 - 用户体验：站内通知、审核结果提醒、候补转正提醒、缺勤扣分提醒。
 - 数据运营：反馈关键词优化、低分反馈跟踪、活动复盘导出、统计图表增强。
 - 管理能力：审计日志、管理员操作留痕、报名名单 Excel 导出。
-- 生产化准备：密码哈希、配置隔离、接口权限测试、部署说明整理。
+- 生产化准备：接口权限测试、部署说明整理、生产环境密钥轮换规范。
